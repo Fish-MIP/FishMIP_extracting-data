@@ -18,7 +18,7 @@ This notebook will guide you through the steps of how to create a mask using LME
 
 ## Loading R libraries
 
-```{r libraries results = "hide", warnings = F, message = F}
+```{r libraries, results = "hide", warnings = F, message = F}
 library(sf)
 library(tidyverse)
 library(stringr)
@@ -132,9 +132,6 @@ plot(tc1)
 tc1_crop <- st_crop(tc1, LMEs)
 plot(tc1_crop)
 tc1_crop
-# st_crs(tc1)
-# 
-# x <- st_intersection(LMEs, tc1)
 ```
 
 ```{r}
