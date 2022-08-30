@@ -1,0 +1,144 @@
+---
+title: "Creating your own mask from a shapefile"
+author: "Denisse Fierro Arcos"
+date: "2022-08-30"
+output: 
+  github_document:
+    toc: true
+    html_preview: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This notebook will guide you through the steps of how to create a mask using LME shapefiles used in the FishMIP project.
+
+## Loading R libraries
+
+```{r libraries results = "hide", warnings = F, message = F}
+library(sf)
+library(tidyverse)
+library(stringr)
+library(stars)
+library(geobgu)
+```
+
+## Loading shapefiles
+
+LME shapefiles included in the FishMIP project are included under the `Data` folder. First, we will get the file paths for these shapefiles.
+
+### Getting list of LME names from directory paths
+
+```{r shapefiles_dirs}
+#Getting the names of directories containing the shapefiles for different regions of interest
+names_regions <- list.dirs(path = "../Data/Shapefiles_Regions/", recursive = F, 
+                           full.names = F)
+
+#Extracting the names from the directories
+names_regions <- str_split_fixed(names_regions, "_", n = 2)[,1]
+names_regions
+```
+
+### Getting file paths for shapefiles
+
+```{r shapefiles_paths}
+#Getting file paths
+regions_paths <- list.files(path = "../Data/Shapefiles_Regions/", pattern = ".shp$", 
+                            recursive = T, full.names = T)
+regions_paths
+```
+
+### Loading regions
+
+We must first ensure that all shapefiles are in the same coordinate reference system (CRS) prior to creating a single shapefile. We will load each shapefile into a list and change the CRS if necessary. We are also making sure that any shapefiles that cross the international dateline are shown correctly when WGS84 CRS (EPSG:4326) is assigned.
+
+```{r shapefiles_load}
+#Create empty list to store shapefiles
+AOI_list <- list()
+
+for(i in seq_along(regions_paths)){
+  #Load original shapefile
+  reg_raw <- read_sf(regions_paths[i]) %>%
+    mutate(region = names_regions[i])
+  #Check shapefile CRS. If none assigned and geometry is between -180 and +180, then assign WGS84
+  if(st_crs(reg_raw) == "" | is.na(st_crs(reg_raw)) | is.null(st_crs(reg_raw))){
+    if(sum(reg_raw$geometry[[1]][[1]] > 180) == F & sum(reg_raw$geometry[[1]][[1]] < -180) == F){
+      st_crs(reg_raw) <- 4326}
+    #If the shapefile has a CRS different to 4326, then transform it to WGS84
+    }else if(st_crs(reg_raw) != st_crs(4326)){
+      reg_raw <- st_transform(reg_raw, 4326) %>% 
+        #Make sure it wraps around the international dateline
+        st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=180"))
+    }
+  #Remove internal region boundaries
+  reg_raw <- reg_raw %>% 
+    group_by(region) %>% 
+    summarise()
+  
+  #Saving shapefiles in empty list
+  AOI_list[[i]] <- reg_raw
+}
+```
+Now that all shapefiles are in the same CRS, we can create a single shapefile for all LME regions.
+
+```{r shapefiles_merge}
+LMEs <- AOI_list %>% 
+  bind_rows()
+```
+
+## Plotting merged shapefile
+```{r plot_shapefile}
+#We will load a world map for reference
+land <- rnaturalearth::ne_countries(type = "countries", returnclass = "sf")
+
+#Plotting LMEs over world map
+LMEs %>% 
+  ggplot()+
+  geom_sf(aes(fill = region))+
+  geom_sf(data = land, inherit.aes = F, color = "gray")+
+  theme_bw()
+```
+## Saving LME polygons as a single shapefile
+```{r shapefile_saving}
+st_write(LMEs, "../Data/Masks/FishMIP_LMEs_all.shp", append = F)
+```
+
+## Extract data with multipolygon feature
+Finally, we will use the newly created shapefile to extract data for our regions of interest.
+
+```{r extracting_data_raster}
+#Loading sample raster from disk
+data_file <- "../Data/ecoocean_gfdl-esm4_nobasd_historical_histsoc_default_tc_global_monthly_1950_2014.nc"
+tc_raster <- read_stars(data_file)%>% 
+  st_set_crs(st_crs(LMEs))
+names(tc_raster) <- "tc"
+
+max_val <- max(tc_raster$tc)
+
+#Masking land values
+tc_raster <- st_apply(tc_raster, "time", function(x) na_if(x, as.numeric(max_val)))
+```
+
+Plotting one time step as an example
+
+```{r}
+tc1 <- tc_raster %>%
+  slice(index = 1, along = "time")
+plot(tc1)
+
+tc1_crop <- st_crop(tc1, LMEs)
+plot(tc1_crop)
+tc1_crop
+# st_crs(tc1)
+# 
+# x <- st_intersection(LMEs, tc1)
+```
+
+```{r}
+tc1_crop2 <- tc1[LMEs]
+
+```
+
