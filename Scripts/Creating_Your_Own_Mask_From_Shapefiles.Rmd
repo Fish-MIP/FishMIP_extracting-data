@@ -122,20 +122,60 @@ max_val <- max(tc_raster$tc)
 tc_raster <- st_apply(tc_raster, "time", function(x) na_if(x, as.numeric(max_val)))
 ```
 
-Plotting one time step as an example
+Plotting one time step as an example.
 
 ```{r}
 tc1 <- tc_raster %>%
   slice(index = 1, along = "time")
 plot(tc1)
+```
 
+
+## Extract data from raster
+
+### Option A with `st_crop`
+```{r}
 tc1_crop <- st_crop(tc1, LMEs)
 plot(tc1_crop)
-tc1_crop
 ```
 
+### Option B with simple mask
 ```{r}
 tc1_crop2 <- tc1[LMEs]
-
+plot(tc1_crop2)
 ```
+
+## Extracting time series
+Get the dates for time steps in raster
+```{r}
+time_steps <- st_get_dimension_values(tc_raster, "time")
+head(time_steps)
+```
+## Plotting time series
+Extracting mean per timestep. Showing timeseries for one region only.
+
+```{r}
+#Extracting data for all timesteps
+lme_extract <- LMEs %>% 
+  mutate(mean = raster_extract(tc_raster, LMEs, fun = mean, na.rm = T))
+
+#Transforming shapefile into dataframe
+lme_extract <- lme_extract %>% 
+  st_drop_geometry()
+
+#Shaping dataframe better before plotting
+ts_lme <- as.data.frame(lme_extract$mean)
+names(ts_lme) <- time_steps
+ts_lme <- ts_lme %>% 
+  mutate(region = lme_extract$region, .before = 1) %>% 
+  pivot_longer(!region, names_to = "date", values_to = "mean_tc") %>% 
+  mutate(date = lubridate::ymd(date),
+         region = factor(region))
+
+#Plotting results
+ts_lme %>%  
+  ggplot(aes(date, mean_tc))+
+  geom_line(aes(colour = region))
+```
+
 

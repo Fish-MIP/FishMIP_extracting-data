@@ -20,6 +20,16 @@ Denisse Fierro Arcos
 -   <a href="#extract-data-with-multipolygon-feature"
     id="toc-extract-data-with-multipolygon-feature">Extract data with
     multipolygon feature</a>
+-   <a href="#extract-data-from-raster"
+    id="toc-extract-data-from-raster">Extract data from raster</a>
+    -   <a href="#option-a-with-st_crop" id="toc-option-a-with-st_crop">Option A
+        with <code>st_crop</code></a>
+    -   <a href="#option-b-with-simple-mask"
+        id="toc-option-b-with-simple-mask">Option B with simple mask</a>
+-   <a href="#extracting-time-series"
+    id="toc-extracting-time-series">Extracting time series</a>
+-   <a href="#plotting-time-series" id="toc-plotting-time-series">Plotting
+    time series</a>
 
 ## Introduction
 
@@ -160,7 +170,7 @@ max_val <- max(tc_raster$tc)
 tc_raster <- st_apply(tc_raster, "time", function(x) na_if(x, as.numeric(max_val)))
 ```
 
-Plotting one time step as an example
+Plotting one time step as an example.
 
 ``` r
 tc1 <- tc_raster %>%
@@ -170,26 +180,64 @@ plot(tc1)
 
 ![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
 
+## Extract data from raster
+
+### Option A with `st_crop`
+
 ``` r
 tc1_crop <- st_crop(tc1, LMEs)
 plot(tc1_crop)
 ```
 
-![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
+![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
 
-``` r
-tc1_crop
-```
-
-    ## stars object with 2 dimensions and 1 attribute
-    ## attribute(s):
-    ##             Min.      1st Qu.       Median       Mean    3rd Qu.    Max.  NA's
-    ## tc  5.282056e-07 9.731372e-05 0.0007611539 0.07636744 0.02588334 1.68997 43168
-    ## dimension(s):
-    ##   from  to offset delta refsys point values x/y
-    ## x    1 360   -180     1 WGS 84    NA   NULL [x]
-    ## y   25 146     90    -1 WGS 84    NA   NULL [y]
+### Option B with simple mask
 
 ``` r
 tc1_crop2 <- tc1[LMEs]
+plot(tc1_crop2)
 ```
+
+![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+
+## Extracting time series
+
+Get the dates for time steps in raster
+
+``` r
+time_steps <- st_get_dimension_values(tc_raster, "time")
+head(time_steps)
+```
+
+    ## [1] "1950-01-01" "1950-02-01" "1950-03-01" "1950-04-01" "1950-05-01"
+    ## [6] "1950-06-01"
+
+## Plotting time series
+
+Extracting mean per timestep. Showing timeseries for one region only.
+
+``` r
+#Extracting data for all timesteps
+lme_extract <- LMEs %>% 
+  mutate(mean = raster_extract(tc_raster, LMEs, fun = mean, na.rm = T))
+
+#Transforming shapefile into dataframe
+lme_extract <- lme_extract %>% 
+  st_drop_geometry()
+
+#Shaping dataframe better before plotting
+ts_lme <- as.data.frame(lme_extract$mean)
+names(ts_lme) <- time_steps
+ts_lme <- ts_lme %>% 
+  mutate(region = lme_extract$region, .before = 1) %>% 
+  pivot_longer(!region, names_to = "date", values_to = "mean_tc") %>% 
+  mutate(date = lubridate::ymd(date),
+         region = factor(region))
+
+#Plotting results
+ts_lme %>%  
+  ggplot(aes(date, mean_tc))+
+  geom_line(aes(colour = region))
+```
+
+![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
