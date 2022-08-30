@@ -101,7 +101,9 @@ LMEs %>%
   geom_sf(data = land, inherit.aes = F, color = "gray")+
   theme_bw()
 ```
+
 ## Saving LME polygons as a single shapefile
+
 ```{r shapefile_saving}
 st_write(LMEs, "../Data/Masks/FishMIP_LMEs_all.shp", append = F)
 ```
@@ -124,7 +126,7 @@ tc_raster <- st_apply(tc_raster, "time", function(x) na_if(x, as.numeric(max_val
 
 Plotting one time step as an example.
 
-```{r}
+```{r raster_slice}
 tc1 <- tc_raster %>%
   slice(index = 1, along = "time")
 plot(tc1)
@@ -134,27 +136,27 @@ plot(tc1)
 ## Extract data from raster
 
 ### Option A with `st_crop`
-```{r}
+```{r raster_crop}
 tc1_crop <- st_crop(tc1, LMEs)
 plot(tc1_crop)
 ```
 
 ### Option B with simple mask
-```{r}
+```{r raster_mask}
 tc1_crop2 <- tc1[LMEs]
 plot(tc1_crop2)
 ```
 
 ## Extracting time series
 Get the dates for time steps in raster
-```{r}
+```{r ts_dates}
 time_steps <- st_get_dimension_values(tc_raster, "time")
 head(time_steps)
 ```
 ## Plotting time series
 Extracting mean per timestep. Showing timeseries for one region only.
 
-```{r}
+```{r ts_plot}
 #Extracting data for all timesteps
 lme_extract <- LMEs %>% 
   mutate(mean = raster_extract(tc_raster, LMEs, fun = mean, na.rm = T))

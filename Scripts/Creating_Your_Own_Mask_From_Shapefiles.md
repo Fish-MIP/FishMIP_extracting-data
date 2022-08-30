@@ -17,6 +17,9 @@ Denisse Fierro Arcos
     -   <a href="#loading-regions" id="toc-loading-regions">Loading regions</a>
 -   <a href="#plotting-merged-shapefile"
     id="toc-plotting-merged-shapefile">Plotting merged shapefile</a>
+-   <a href="#saving-lme-polygons-as-a-single-shapefile"
+    id="toc-saving-lme-polygons-as-a-single-shapefile">Saving LME polygons
+    as a single shapefile</a>
 -   <a href="#extract-data-with-multipolygon-feature"
     id="toc-extract-data-with-multipolygon-feature">Extract data with
     multipolygon feature</a>
@@ -141,7 +144,8 @@ LMEs %>%
 ```
 
 ![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/plot_shapefile-1.png)<!-- -->
-\## Saving LME polygons as a single shapefile
+
+## Saving LME polygons as a single shapefile
 
 ``` r
 st_write(LMEs, "../Data/Masks/FishMIP_LMEs_all.shp", append = F)
@@ -178,7 +182,7 @@ tc1 <- tc_raster %>%
 plot(tc1)
 ```
 
-![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/raster_slice-1.png)<!-- -->
 
 ## Extract data from raster
 
@@ -189,7 +193,7 @@ tc1_crop <- st_crop(tc1, LMEs)
 plot(tc1_crop)
 ```
 
-![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/raster_crop-1.png)<!-- -->
 
 ### Option B with simple mask
 
@@ -198,7 +202,7 @@ tc1_crop2 <- tc1[LMEs]
 plot(tc1_crop2)
 ```
 
-![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/raster_mask-1.png)<!-- -->
 
 ## Extracting time series
 
@@ -240,4 +244,4 @@ ts_lme %>%
   geom_line(aes(colour = region))
 ```
 
-![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/ts_plot-1.png)<!-- -->
