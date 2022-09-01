@@ -44,13 +44,18 @@ use_python(python_path)
 
 ## Python-based code
 ### Loading ISIMIP Client script
-The script originally came from the ISIMIP-Client Python package. Their source code is available online in their [repository](https://github.com/ISI-MIP/isimip-client). We will now load the script containing these functions.  
-  
-Alternatively, you can install the entire library using the following line of code: `!pip install git+https://github.com/ISI-MIP/isimip-client` in a `Python` chunk.
+The ISIMIP-Client Python package is available online in their [repository](https://github.com/ISI-MIP/isimip-client). We will now load the script containing these functions. You can install the library using the `Python` chunk below. Only activate the chunk below if you have not previously installed the library.
 
 ```{python}
-#Calling the script with the ISIMIP-client functions
-import client as cl
+#Install 
+#!pip install git+https://github.com/ISI-MIP/isimip-client
+```
+
+We will now load the `ISIMIP client` library and start a session so we can start search the repository and downloading data.
+
+```{python}
+#Loading the library
+import isimip_client.client as cl
 
 #Starting a session
 client = cl.ISIMIPClient()
@@ -66,6 +71,8 @@ query = client.datasets(simulation_round = 'ISIMIP3b',\
                            climate_scenario = 'historical',\
                            model = 'ecoocean',\
                            variable = 'tc')
+
+query
 ```
 
 This query will return a Python dictionary with the results of your search. You can find the name of the keys in the dictionary by typing `query.keys()`. You can inspect the search results by typing `query['name_of_key"]`.  
@@ -116,8 +123,8 @@ We will download the data and store it into the `data` folder. First we will mak
 import os
 
 #Creating a data folder if one does not already exist
-if os.path.exists('../data/') == False:
-  os.makedirs('../data/')
+if os.path.exists('../Data/') == False:
+  os.makedirs('../Data/')
 else:
   print('Folder already exists')
 
@@ -127,16 +134,16 @@ Use the `client.download()` function to save data to disk.
 ```{python}
 #To download the subsetted data
 client.download(url = SO_data_URL['file_url'], \
-                path = '../data/', validate = False, \
+                path = '../Data/', validate = False, \
                 extract = True)
 
 ```
 
-To download global data.
+To download global data we use the same function, but we need to point at the correct variable storing the URL to the global dataset.
 ```{python}
-client.download(url = urls[0], \
-                path = '../data/', validate = False, \
-                extract = True)
+# client.download(url = urls[0], \
+#                 path = '../Data/', validate = False, \
+#                 extract = True)
                 
 ```
 
@@ -149,7 +156,7 @@ For a quick overview of the content of the dataset we just downloaded, we can ma
 
 ```{r}
 #Provide file path to netcdf that was recently downloaded.
-data_file <- "../data/ecoocean_gfdl-esm4_nobasd_historical_histsoc_default_tc_lat-90.0to-40.0lon-180.0to180.0_monthly_1950_2014.nc"
+data_file <- list.files(path = "../Data/", pattern = "nc$", full.names = T)
 
 #Check contents of netcdf
 GlanceNetCDF(data_file)
@@ -209,11 +216,14 @@ clim_tc <- tc_SO %>%
 ### Plotting climatology
 
 ```{r}
+#Switching off spherical geometry prior to accessing and cropping world shapefile
+sf_use_s2(F)
+
 #Accessing coastline shapefiles
 land <- rnaturalearth::ne_countries(returnclass = "sf") %>% 
   #Extracting land within data boundaries
-  st_crop(c(ymin = -90, ymax = -40, 
-            xmin = -180, xmax = 180)) 
+  st_crop(ymin = -90, ymax = -40, 
+            xmin = -180, xmax = 180)
 
 #Plotting data
 clim_tc %>% 
@@ -236,23 +246,6 @@ clim_tc %>%
  
 
 ```
-
-
-### Obtaining timeseries
-
-
-```{r}
-# tc_SO %>% 
-#   #Calculating climatological mean for total catch per pixel
-#   group_by(time) %>% 
-#   summarise(mean_tc = mean(tc, na.rm = F)) %>% View()
-#   ggplot() %>% 
-  
-
-
-  
-```
-
 
 
 
