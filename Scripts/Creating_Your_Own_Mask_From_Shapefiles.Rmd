@@ -56,6 +56,9 @@ regions_paths
 We must first ensure that all shapefiles are in the same coordinate reference system (CRS) prior to creating a single shapefile. We will load each shapefile into a list and change the CRS if necessary. We are also making sure that any shapefiles that cross the international dateline are shown correctly when WGS84 CRS (EPSG:4326) is assigned.
 
 ```{r shapefiles_load}
+#Switching off spherical geometry prior to accessing and cropping world shapefile
+sf_use_s2(F)
+
 #Create empty list to store shapefiles
 AOI_list <- list()
 
@@ -73,10 +76,18 @@ for(i in seq_along(regions_paths)){
         #Make sure it wraps around the international dateline
         st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=180"))
     }
+  
   #Remove internal region boundaries
   reg_raw <- reg_raw %>% 
     group_by(region) %>% 
-    summarise()
+    summarise() %>% 
+    #Ensure there are only two dimensions
+    st_zm()
+  
+  #Make sure final area is polygon only
+  if(unique(st_geometry_type(reg_raw)) != "POLYGON"){
+    reg_raw <- st_cast(reg_raw, "POLYGON", do_split = F)
+  }
   
   #Saving shapefiles in empty list
   AOI_list[[i]] <- reg_raw
@@ -112,10 +123,14 @@ st_write(LMEs, "../Data/Masks/FishMIP_LMEs_all.shp", append = F)
 Finally, we will use the newly created shapefile to extract data for our regions of interest.
 
 ```{r extracting_data_raster}
+#Getting file paths of raster with global total catch data
+data_file <- list.files(path = "../Data/", pattern = ".*global.*nc$", full.names = T)
+
 #Loading sample raster from disk
-data_file <- "../Data/ecoocean_gfdl-esm4_nobasd_historical_histsoc_default_tc_global_monthly_1950_2014.nc"
 tc_raster <- read_stars(data_file)%>% 
   st_set_crs(st_crs(LMEs))
+
+#Change name of variable for easier access to data
 names(tc_raster) <- "tc"
 
 max_val <- max(tc_raster$tc)

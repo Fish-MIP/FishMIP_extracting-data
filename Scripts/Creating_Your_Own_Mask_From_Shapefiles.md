@@ -66,7 +66,10 @@ names_regions <- str_split_fixed(names_regions, "_", n = 2)[,1]
 names_regions
 ```
 
-    ## [1] "benguela"  "Brasil-NE" "ebsshelf"  "kerguelen" "SE-Aust"
+    ##  [1] "benguela"               "Brasil-NE"              "Chatham-Rise-NZ"       
+    ##  [4] "East-Bass-Strait"       "East-Bearing-Sea-shelf" "Gulf of Alaska - mizer"
+    ##  [7] "kerguelen"              "NorthSea"               "SE-Aust"               
+    ## [10] "SEAustralia-mizer"
 
 ### Getting file paths for shapefiles
 
@@ -77,11 +80,17 @@ regions_paths <- list.files(path = "../Data/Shapefiles_Regions/", pattern = ".sh
 regions_paths
 ```
 
-    ## [1] "../Data/Shapefiles_Regions//benguela_shapefiles/model_regions_v3_geo.shp"        
-    ## [2] "../Data/Shapefiles_Regions//Brasil-NE_regional_Model/BRA_NE_Model.shp"           
-    ## [3] "../Data/Shapefiles_Regions//ebsshelf_all_shp/ebsshelf_all.shp"                   
-    ## [4] "../Data/Shapefiles_Regions//kerguelen_shapefiles/Ecopath_model_domain_curved.shp"
-    ## [5] "../Data/Shapefiles_Regions//SE-Aust_shapefiles/Atlantis_SE_boundary_box.shp"
+    ##  [1] "../Data/Shapefiles_Regions//benguela_shapefiles/model_regions_v3_geo.shp"                  
+    ##  [2] "../Data/Shapefiles_Regions//Brasil-NE_regional_Model/BRA_NE_Model.shp"                     
+    ##  [3] "../Data/Shapefiles_Regions//Chatham-Rise-NZ_Mizer/CHAT30_aea.shp"                          
+    ##  [4] "../Data/Shapefiles_Regions//Chatham-Rise-NZ_Mizer/CHAT30_LL.shp"                           
+    ##  [5] "../Data/Shapefiles_Regions//East-Bass-Strait_EwE/bulman_region.shp"                        
+    ##  [6] "../Data/Shapefiles_Regions//East-Bearing-Sea-shelf_subregions10_60/EBS_subregions10_60.shp"
+    ##  [7] "../Data/Shapefiles_Regions//Gulf of Alaska - mizer/GOA.shp"                                
+    ##  [8] "../Data/Shapefiles_Regions//kerguelen_shapefiles/Ecopath_model_domain_curved.shp"          
+    ##  [9] "../Data/Shapefiles_Regions//NorthSea_IBTS_mizer/Shapefile.shp"                             
+    ## [10] "../Data/Shapefiles_Regions//SE-Aust_shapefiles/Atlantis_SE_boundary_box.shp"               
+    ## [11] "../Data/Shapefiles_Regions//SEAustralia-mizer_shapefiles/sess_cts.shp"
 
 ### Loading regions
 
@@ -90,6 +99,13 @@ reference system (CRS) prior to creating a single shapefile. We will
 load each shapefile into a list and change the CRS if necessary. We are
 also making sure that any shapefiles that cross the international
 dateline are shown correctly when WGS84 CRS (EPSG:4326) is assigned.
+
+``` r
+#Switching off spherical geometry prior to accessing and cropping world shapefile
+sf_use_s2(F)
+```
+
+    ## Spherical geometry (s2) switched off
 
 ``` r
 #Create empty list to store shapefiles
@@ -109,17 +125,41 @@ for(i in seq_along(regions_paths)){
         #Make sure it wraps around the international dateline
         st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=180"))
     }
+  
   #Remove internal region boundaries
   reg_raw <- reg_raw %>% 
     group_by(region) %>% 
-    summarise()
+    summarise() %>% 
+    #Ensure there are only two dimensions
+    st_zm()
+  
+  #Make sure final area is polygon only
+  if(unique(st_geometry_type(reg_raw)) != "POLYGON"){
+    reg_raw <- st_cast(reg_raw, "POLYGON", do_split = F)
+  }
   
   #Saving shapefiles in empty list
   AOI_list[[i]] <- reg_raw
 }
 ```
 
-    ## st_as_s2(): dropping Z and/or M coordinate
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+
+    ## Warning in st_cast.MULTIPOLYGON(X[[i]], ...): polygon from first part only
+
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+
+    ## Warning in st_cast.MULTIPOLYGON(X[[i]], ...): polygon from first part only
+
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
 
 Now that all shapefiles are in the same CRS, we can create a single
 shapefile for all LME regions.
@@ -154,7 +194,7 @@ st_write(LMEs, "../Data/Masks/FishMIP_LMEs_all.shp", append = F)
     ## Deleting layer `FishMIP_LMEs_all' using driver `ESRI Shapefile'
     ## Writing layer `FishMIP_LMEs_all' to data source 
     ##   `../Data/Masks/FishMIP_LMEs_all.shp' using driver `ESRI Shapefile'
-    ## Writing 5 features with 1 fields and geometry type Unknown (any).
+    ## Writing 11 features with 1 fields and geometry type Polygon.
 
 ## Extract data with multipolygon feature
 
@@ -162,10 +202,14 @@ Finally, we will use the newly created shapefile to extract data for our
 regions of interest.
 
 ``` r
+#Getting file paths of raster with global total catch data
+data_file <- list.files(path = "../Data/", pattern = ".*global.*nc$", full.names = T)
+
 #Loading sample raster from disk
-data_file <- "../Data/ecoocean_gfdl-esm4_nobasd_historical_histsoc_default_tc_global_monthly_1950_2014.nc"
 tc_raster <- read_stars(data_file)%>% 
   st_set_crs(st_crs(LMEs))
+
+#Change name of variable for easier access to data
 names(tc_raster) <- "tc"
 
 max_val <- max(tc_raster$tc)
@@ -190,6 +234,19 @@ plot(tc1)
 
 ``` r
 tc1_crop <- st_crop(tc1, LMEs)
+```
+
+    ## Warning in st_is_longlat(x): bounding box has potentially an invalid value range
+    ## for longlat data
+
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+
+    ## Warning in st_is_longlat(x): bounding box has potentially an invalid value range
+    ## for longlat data
+
+    ## although coordinates are longitude/latitude, st_intersects assumes that they are planar
+
+``` r
 plot(tc1_crop)
 ```
 
@@ -199,6 +256,19 @@ plot(tc1_crop)
 
 ``` r
 tc1_crop2 <- tc1[LMEs]
+```
+
+    ## Warning in st_is_longlat(x): bounding box has potentially an invalid value range
+    ## for longlat data
+
+    ## although coordinates are longitude/latitude, st_union assumes that they are planar
+
+    ## Warning in st_is_longlat(x): bounding box has potentially an invalid value range
+    ## for longlat data
+
+    ## although coordinates are longitude/latitude, st_intersects assumes that they are planar
+
+``` r
 plot(tc1_crop2)
 ```
 
@@ -243,5 +313,7 @@ ts_lme %>%
   ggplot(aes(date, mean_tc))+
   geom_line(aes(colour = region))
 ```
+
+    ## Warning: Removed 780 row(s) containing missing values (geom_path).
 
 ![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/ts_plot-1.png)<!-- -->
