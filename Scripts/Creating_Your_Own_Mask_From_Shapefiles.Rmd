@@ -72,13 +72,13 @@ for(i in seq_along(regions_paths)){
       st_crs(reg_raw) <- 4326}
     #If the shapefile has a CRS different to 4326, then transform it to WGS84
     }else if(st_crs(reg_raw) != st_crs(4326)){
-      reg_raw <- st_transform(reg_raw, 4326) %>% 
-        #Make sure it wraps around the international dateline
-        st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=180"))
+      reg_raw <- st_transform(reg_raw, 4326)
     }
   
   #Remove internal region boundaries
   reg_raw <- reg_raw %>% 
+    #Make sure it wraps around the international dateline
+    st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=180")) %>% 
     group_by(region) %>% 
     summarise() %>% 
     #Ensure there are only two dimensions
