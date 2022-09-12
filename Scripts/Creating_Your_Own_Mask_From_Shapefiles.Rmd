@@ -20,8 +20,8 @@ This notebook will guide you through the steps of how to create a mask using LME
 
 ```{r libraries, results = "hide", warnings = F, message = F}
 library(sf)
+library(raster)
 library(tidyverse)
-library(stringr)
 library(stars)
 library(geobgu)
 ```
@@ -48,6 +48,9 @@ names_regions
 #Getting file paths
 regions_paths <- list.files(path = "../Data/Shapefiles_Regions/", pattern = ".shp$", 
                             recursive = T, full.names = T)
+
+#Ignore any shapefiles included in the "SupportInfo" subfolder
+regions_paths <- regions_paths[!str_detect(regions_paths, "SupportInfo")]
 regions_paths
 ```
 
@@ -90,13 +93,13 @@ for(i in seq_along(regions_paths)){
   }
   
   #Saving shapefiles in empty list
-  AOI_list[[i]] <- reg_raw
+  AOI_list[[names_regions[i]]] <- reg_raw
 }
 ```
 Now that all shapefiles are in the same CRS, we can create a single shapefile for all LME regions.
 
 ```{r shapefiles_merge}
-LMEs <- AOI_list %>% 
+RMEs <- AOI_list %>% 
   bind_rows()
 ```
 
@@ -106,20 +109,121 @@ LMEs <- AOI_list %>%
 land <- rnaturalearth::ne_countries(type = "countries", returnclass = "sf")
 
 #Plotting LMEs over world map
-LMEs %>% 
+RMEs %>% 
   ggplot()+
   geom_sf(aes(fill = region))+
   geom_sf(data = land, inherit.aes = F, color = "gray")+
   theme_bw()
 ```
 
-## Saving LME polygons as a single shapefile
+### Saving LME polygons as a single shapefile
 
 ```{r shapefile_saving}
-st_write(LMEs, "../Data/Masks/FishMIP_LMEs_all.shp", append = F)
+st_write(RMEs, "../Data/Masks/FishMIP_RMEs_all.shp", append = F)
 ```
 
-## Extract data with multipolygon feature
+
+## Creating a multilayer raster mask based on merged shapefile
+We will now create multilayer masks at two resolutions: one degree and 0.25 degrees, which match the resolution of the model forcings. We will first load sample rasters at these two resolutions.
+
+### Loading input rasters
+```{r load_rasters_input}
+deg025 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_15arcmin_global_fixed.nc")
+deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+
+#Plotting raster
+plot(deg1)
+```
+
+### Defining function to create rasters from shapefiles
+We will define our own function that will use the shapefiles above to create rasters.
+
+```{r function_shp_raster}
+#Defining function which needs a shapefile and a raster as input
+shp_to_raster <- function(shp, nc_raster){
+  #If needed, sf shapefiles can be transformed into Spatial objects
+  # shp <- as(shp, "Spatial")
+  #The final raster will have ones where within the shapefile boundaries
+  rasterize(shp, nc_raster, field = 1)
+}
+
+```
+
+### Applying function to list containing all shapefiles
+
+```{r mapping_function}
+#Applying function defined above to all shapefiles within list
+deg1_raster <- map(AOI_list, shp_to_raster, deg1)
+deg025_raster <- map(AOI_list, shp_to_raster, deg025)
+
+#Stacking rasters to create a single multilayer raster for each resolution
+deg1_raster <- stack(deg1_raster)
+deg025_raster <- stack(deg025_raster)
+
+```
+
+### Saving rasters to disk
+
+```{r}
+writeRaster(deg025_raster, "../Data/Masks/fishMIP_regional_025mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
+            xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
+            longname = "Region Mask -- True or False", zname = "Region")
+
+writeRaster(deg1_raster, "../Data/Masks/fishMIP_regional_1mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
+            xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
+            longname = "Region Mask -- True or False", zname = "Region")
+```
+## Using Python to update name of regions in netcdf file
+
+```{r py_ret}
+library(reticulate)
+python_path <- as.character(Sys.which("python"))
+use_python(python_path)
+```
+
+
+```{python}
+#Loading xarray library to open netcdf file
+import xarray as xr
+
+#Open stacked rasters
+deg1 = xr.open_dataset("../Data/Masks/fishMIP_regional_1mask_ISIMIP3a.nc")
+deg025 = xr.open_dataset("../Data/Masks/fishMIP_regional_025mask_ISIMIP3a.nc")
+
+RME_names = r.names_regions
+
+#Create an empty dictionary
+RME_mask1deg = []
+RME_mask025deg = []
+
+#Loop through each dictionary entry
+for da1deg, da025deg, rme in zip(deg1.RegionMask, deg025.RegionMask, RME_names):
+  da1deg = da1deg.drop_vars("Region")
+  da025deg = da025deg.drop_vars("Region")
+  #Adding dimension with LME name
+  RME_mask1deg.append(da1deg.expand_dims(RME_name = [rme]))
+  RME_mask025deg.append(da025deg.expand_dims(RME_name = [rme]))
+
+#Creating multidimensional dataset
+RME_mask1deg = xr.concat(RME_mask1deg, dim = 'RME_name')
+RME_mask025deg = xr.concat(RME_mask025deg, dim = 'RME_name')
+
+#Check results
+RME_mask1deg; RME_mask025deg
+
+RME_mask1deg.to_netcdf("../Data/Masks/fishMIP_regional_1degmask_ISIMIP3a.nc", mode = 'w')
+RME_mask025deg.to_netcdf("../Data/Masks/fishMIP_regional_025degmask_ISIMIP3a.nc", mode = 'w')
+```
+### Checking results in R
+
+```{r plot_stack}
+deg1 <- stack("../Data/Masks/fishMIP_regional_1degmask_ISIMIP3a.nc", varname = "RegionMask")
+deg025 <- stack("../Data/Masks/fishMIP_regional_025degmask_ISIMIP3a.nc", varname = "RegionMask")
+
+plot(deg1)
+```
+
+## Extracting data with multipolygon feature
 Finally, we will use the newly created shapefile to extract data for our regions of interest.
 
 ```{r extracting_data_raster}
@@ -128,7 +232,7 @@ data_file <- list.files(path = "../Data/", pattern = ".*global.*nc$", full.names
 
 #Loading sample raster from disk
 tc_raster <- read_stars(data_file)%>% 
-  st_set_crs(st_crs(LMEs))
+  st_set_crs(st_crs(RMEs))
 
 #Change name of variable for easier access to data
 names(tc_raster) <- "tc"
@@ -152,13 +256,13 @@ plot(tc1)
 
 ### Option A with `st_crop`
 ```{r raster_crop}
-tc1_crop <- st_crop(tc1, LMEs)
+tc1_crop <- st_crop(tc1, RMEs)
 plot(tc1_crop)
 ```
 
 ### Option B with simple mask
 ```{r raster_mask}
-tc1_crop2 <- tc1[LMEs]
+tc1_crop2 <- tc1[RMEs]
 plot(tc1_crop2)
 ```
 
@@ -173,24 +277,24 @@ Extracting mean per timestep. Showing timeseries for one region only.
 
 ```{r ts_plot}
 #Extracting data for all timesteps
-lme_extract <- LMEs %>% 
-  mutate(mean = raster_extract(tc_raster, LMEs, fun = mean, na.rm = T))
+rme_extract <- RMEs %>% 
+  mutate(mean = raster_extract(tc_raster, RMEs, fun = mean, na.rm = T))
 
 #Transforming shapefile into dataframe
-lme_extract <- lme_extract %>% 
+rme_extract <- rme_extract %>% 
   st_drop_geometry()
 
 #Shaping dataframe better before plotting
-ts_lme <- as.data.frame(lme_extract$mean)
+ts_lme <- as.data.frame(rme_extract$mean)
 names(ts_lme) <- time_steps
 ts_lme <- ts_lme %>% 
-  mutate(region = lme_extract$region, .before = 1) %>% 
+  mutate(region = rme_extract$region, .before = 1) %>% 
   pivot_longer(!region, names_to = "date", values_to = "mean_tc") %>% 
   mutate(date = lubridate::ymd(date),
          region = factor(region))
 
 #Plotting results
-ts_lme %>%  
+ts_lme %>%
   ggplot(aes(date, mean_tc))+
   geom_line(aes(colour = region))
 ```
