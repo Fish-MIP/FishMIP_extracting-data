@@ -299,4 +299,30 @@ ts_lme %>%
   geom_line(aes(colour = region))
 ```
 
+## Creating data frame with coordinates from rasters
+Tasman region not showing in 1 deg raster because its size is too small.
+```{r}
+#1 degree raster
+deg1_df <- rasterToPoints(deg1) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = -c(x, y), names_to = "region") %>% 
+  drop_na(value) %>% 
+  rename("Lon" = "x", "Lat" = "y") %>% 
+  select(-value)
+
+#0.25 degree raster
+deg025_df <- rasterToPoints(deg025) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = -c(x, y), names_to = "region") %>% 
+  drop_na(value) %>% 
+  rename("Lon" = "x", "Lat" = "y") %>% 
+  select(-value)
+
+#Saving results
+write.csv(deg1_df, file = "../Data/Masks/fishMIP_regional_1deg_ISIMIP3a.csv",
+          row.names = F)
+
+write.csv(deg025_df, file = "../Data/Masks/fishMIP_regional_025deg_ISIMIP3a.csv",
+          row.names = F)
+```
 
