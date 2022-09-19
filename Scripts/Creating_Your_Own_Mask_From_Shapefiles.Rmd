@@ -35,7 +35,7 @@ LME shapefiles included in the FishMIP project are included under the `Data` fol
 ```{r shapefiles_dirs}
 #Getting the names of directories containing the shapefiles for different regions of interest
 names_regions <- list.dirs(path = "/rd/gem/private/fishmip_inputs/ISIMIP3a/fishmip_regions/Shapefiles_Regions/",
-                           recursive = F, full.names = F)
+                           recursive = F, full.names = F) 
 
 #Extracting the names from the directories
 names_regions <- str_split_fixed(names_regions, "_", n = 2)[,1]
