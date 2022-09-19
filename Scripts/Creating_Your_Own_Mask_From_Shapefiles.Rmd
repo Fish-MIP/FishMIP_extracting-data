@@ -34,8 +34,8 @@ LME shapefiles included in the FishMIP project are included under the `Data` fol
 
 ```{r shapefiles_dirs}
 #Getting the names of directories containing the shapefiles for different regions of interest
-names_regions <- list.dirs(path = "../Data/Shapefiles_Regions/", recursive = F, 
-                           full.names = F)
+names_regions <- list.dirs(path = "/rd/gem/private/fishmip_inputs/ISIMIP3a/fishmip_regions/Shapefiles_Regions/",
+                           recursive = F, full.names = F)
 
 #Extracting the names from the directories
 names_regions <- str_split_fixed(names_regions, "_", n = 2)[,1]
@@ -46,8 +46,8 @@ names_regions
 
 ```{r shapefiles_paths}
 #Getting file paths
-regions_paths <- list.files(path = "../Data/Shapefiles_Regions/", pattern = ".shp$", 
-                            recursive = T, full.names = T)
+regions_paths <- list.files(path = "/rd/gem/private/fishmip_inputs/ISIMIP3a/fishmip_regions/Shapefiles_Regions/", 
+                            pattern = ".shp$", recursive = T, full.names = T)
 
 #Ignore any shapefiles included in the "SupportInfo" subfolder
 regions_paths <- regions_paths[!str_detect(regions_paths, "SupportInfo")]
@@ -119,7 +119,8 @@ RMEs %>%
 ### Saving LME polygons as a single shapefile
 
 ```{r shapefile_saving}
-st_write(RMEs, "../Data/Masks/FishMIP_RMEs_all.shp", append = F)
+st_write(RMEs, "/rd/gem/private/fishmip_inputs/ISIMIP3a/fishmip_regions/FishMIP_RMEs_all.shp", 
+         append = F)
 ```
 
 
@@ -130,9 +131,10 @@ We will now create multilayer masks at two resolutions: one degree and 0.25 degr
 ```{r load_rasters_input}
 deg025 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_15arcmin_global_fixed.nc")
 deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+deg05 <- raster("../Data/InputRasters/Masks_0.5deg.nc")
 
 #Plotting raster
-plot(deg1)
+plot(deg05)
 ```
 
 ### Defining function to create rasters from shapefiles
@@ -155,23 +157,32 @@ shp_to_raster <- function(shp, nc_raster){
 #Applying function defined above to all shapefiles within list
 deg1_raster <- map(AOI_list, shp_to_raster, deg1)
 deg025_raster <- map(AOI_list, shp_to_raster, deg025)
+deg05_raster <- map(AOI_list, shp_to_raster, deg05)
 
 #Stacking rasters to create a single multilayer raster for each resolution
 deg1_raster <- stack(deg1_raster)
 deg025_raster <- stack(deg025_raster)
+deg05_raster <- stack(deg05_raster)
 
 ```
 
 ### Saving rasters to disk
 
 ```{r}
-writeRaster(deg025_raster, "../Data/Masks/fishMIP_regional_025mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
-            xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
-            longname = "Region Mask -- True or False", zname = "Region")
-
-writeRaster(deg1_raster, "../Data/Masks/fishMIP_regional_1mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
-            xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
-            longname = "Region Mask -- True or False", zname = "Region")
+#Checking if masks do not exist
+if(is.null(list.files("../Data/Masks/", pattern = ".nc"))){
+  writeRaster(deg025_raster, "../Data/Masks/fishMIP_regional_025mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
+              xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
+              longname = "Region Mask -- True or False", zname = "Region")
+  
+  writeRaster(deg1_raster, "../Data/Masks/fishMIP_regional_1mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
+              xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
+              longname = "Region Mask -- True or False", zname = "Region")
+  
+  writeRaster(deg05_raster, "../Data/Masks/fishMIP_regional_05mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
+              xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
+              longname = "Region Mask -- True or False", zname = "Region")
+}
 ```
 ## Using Python to update name of regions in netcdf file
 
@@ -188,39 +199,47 @@ import xarray as xr
 
 #Open stacked rasters
 deg1 = xr.open_dataset("../Data/Masks/fishMIP_regional_1mask_ISIMIP3a.nc")
+deg05 = xr.open_dataset("../Data/Masks/fishMIP_regional_05mask_ISIMIP3a.nc")
 deg025 = xr.open_dataset("../Data/Masks/fishMIP_regional_025mask_ISIMIP3a.nc")
 
+#Region names from R vector
 RME_names = r.names_regions
 
-#Create an empty dictionary
+#Create an empty dictionaries
 RME_mask1deg = []
+RME_mask05deg = []
 RME_mask025deg = []
 
 #Loop through each dictionary entry
-for da1deg, da025deg, rme in zip(deg1.RegionMask, deg025.RegionMask, RME_names):
+for da1deg, da05deg, da025deg, rme in zip(deg1.RegionMask, deg05.RegionMask, deg025.RegionMask, RME_names):
   da1deg = da1deg.drop_vars("Region")
+  da05deg = da05deg.drop_vars("Region")
   da025deg = da025deg.drop_vars("Region")
   #Adding dimension with LME name
   RME_mask1deg.append(da1deg.expand_dims(RME_name = [rme]))
+  RME_mask05deg.append(da05deg.expand_dims(RME_name = [rme]))
   RME_mask025deg.append(da025deg.expand_dims(RME_name = [rme]))
 
 #Creating multidimensional dataset
 RME_mask1deg = xr.concat(RME_mask1deg, dim = 'RME_name')
+RME_mask05deg = xr.concat(RME_mask05deg, dim = 'RME_name')
 RME_mask025deg = xr.concat(RME_mask025deg, dim = 'RME_name')
 
 #Check results
-RME_mask1deg; RME_mask025deg
+RME_mask1deg; RME_mask05deg; RME_mask025deg
 
 RME_mask1deg.to_netcdf("../Data/Masks/fishMIP_regional_1degmask_ISIMIP3a.nc", mode = 'w')
+RME_mask05deg.to_netcdf("../Data/Masks/fishMIP_regional_05degmask_ISIMIP3a.nc", mode = 'w')
 RME_mask025deg.to_netcdf("../Data/Masks/fishMIP_regional_025degmask_ISIMIP3a.nc", mode = 'w')
 ```
 ### Checking results in R
 
 ```{r plot_stack}
 deg1 <- stack("../Data/Masks/fishMIP_regional_1degmask_ISIMIP3a.nc", varname = "RegionMask")
+deg05 <- stack("../Data/Masks/fishMIP_regional_05degmask_ISIMIP3a.nc", varname = "RegionMask")
 deg025 <- stack("../Data/Masks/fishMIP_regional_025degmask_ISIMIP3a.nc", varname = "RegionMask")
 
-plot(deg1)
+plot(deg05)
 ```
 
 ## Extracting data with multipolygon feature
@@ -310,6 +329,14 @@ deg1_df <- rasterToPoints(deg1) %>%
   rename("Lon" = "x", "Lat" = "y") %>% 
   select(-value)
 
+#0.5 degree raster
+deg05_df <- rasterToPoints(deg05) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = -c(x, y), names_to = "region") %>% 
+  drop_na(value) %>%
+  rename("Lon" = "x", "Lat" = "y") %>% 
+  select(-value)
+
 #0.25 degree raster
 deg025_df <- rasterToPoints(deg025) %>% 
   as.data.frame() %>% 
@@ -320,6 +347,9 @@ deg025_df <- rasterToPoints(deg025) %>%
 
 #Saving results
 write.csv(deg1_df, file = "../Data/Masks/fishMIP_regional_1deg_ISIMIP3a.csv",
+          row.names = F)
+
+write.csv(deg05_df, file = "../Data/Masks/fishMIP_regional_05deg_ISIMIP3a.csv",
           row.names = F)
 
 write.csv(deg025_df, file = "../Data/Masks/fishMIP_regional_025deg_ISIMIP3a.csv",
