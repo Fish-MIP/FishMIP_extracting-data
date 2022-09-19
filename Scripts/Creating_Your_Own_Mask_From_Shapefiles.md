@@ -17,8 +17,8 @@ Denisse Fierro Arcos
     -   <a href="#loading-regions" id="toc-loading-regions">Loading regions</a>
 -   <a href="#plotting-merged-shapefile"
     id="toc-plotting-merged-shapefile">Plotting merged shapefile</a>
-    -   <a href="#saving-lme-polygons-as-a-single-shapefile"
-        id="toc-saving-lme-polygons-as-a-single-shapefile">Saving LME polygons
+    -   <a href="#saving-rme-polygons-as-a-single-shapefile"
+        id="toc-saving-rme-polygons-as-a-single-shapefile">Saving RME polygons
         as a single shapefile</a>
 -   <a href="#creating-a-multilayer-raster-mask-based-on-merged-shapefile"
     id="toc-creating-a-multilayer-raster-mask-based-on-merged-shapefile">Creating
@@ -51,6 +51,9 @@ Denisse Fierro Arcos
     id="toc-extracting-time-series">Extracting time series</a>
 -   <a href="#plotting-time-series" id="toc-plotting-time-series">Plotting
     time series</a>
+-   <a href="#creating-data-frame-with-coordinates-from-rasters"
+    id="toc-creating-data-frame-with-coordinates-from-rasters">Creating data
+    frame with coordinates from rasters</a>
 
 ## Introduction
 
@@ -243,7 +246,7 @@ RMEs %>%
 
 ![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/plot_shapefile-1.png)<!-- -->
 
-### Saving LME polygons as a single shapefile
+### Saving RME polygons as a single shapefile
 
 ``` r
 st_write(RMEs, "../Data/Masks/FishMIP_RMEs_all.shp", append = F)
@@ -270,9 +273,10 @@ deg025 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_15arcmin
 
 ``` r
 deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+deg05 <- raster("../Data/InputRasters/Masks_0.5deg.nc")
 
 #Plotting raster
-plot(deg1)
+plot(deg05)
 ```
 
 ![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/load_rasters_input-1.png)<!-- -->
@@ -298,22 +302,30 @@ shp_to_raster <- function(shp, nc_raster){
 #Applying function defined above to all shapefiles within list
 deg1_raster <- map(AOI_list, shp_to_raster, deg1)
 deg025_raster <- map(AOI_list, shp_to_raster, deg025)
+deg05_raster <- map(AOI_list, shp_to_raster, deg05)
 
 #Stacking rasters to create a single multilayer raster for each resolution
 deg1_raster <- stack(deg1_raster)
 deg025_raster <- stack(deg025_raster)
+deg05_raster <- stack(deg05_raster)
 ```
 
 ### Saving rasters to disk
 
 ``` r
-# writeRaster(deg025_raster, "../Data/Masks/fishMIP_regional_025mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
-#             xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
-#             longname = "Region Mask -- True or False", zname = "Region")
-# 
-# writeRaster(deg1_raster, "../Data/Masks/fishMIP_regional_1mask_ISIMIP3a.nc", format = "CDF", overwrite = T, 
-#             xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
-#             longname = "Region Mask -- True or False", zname = "Region")
+#Check if masks do not exist in disk
+if(is.null(list.files("../Data/Masks/", pattern = ".nc"))){
+  writeRaster(deg025_raster, "../Data/Masks/fishMIP_regional_025mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
+              xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
+              longname = "Region Mask -- True or False", zname = "Region")
+
+  writeRaster(deg1_raster, "../Data/Masks/fishMIP_regional_1mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
+              xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
+              longname = "Region Mask -- True or False", zname = "Region")
+  
+  writeRaster(deg05_raster, "../Data/Masks/fishMIP_regional_05mask_ISIMIP3a.nc", format = "CDF", overwrite = T,
+              xname = "Longitude", yname = "Latitude", varname = "RegionMask", varunit = "binary",
+              longname = "Region Mask -- True or False", zname = "Region")}
 ```
 
 ## Using Python to update name of regions in netcdf file
@@ -337,30 +349,33 @@ import xarray as xr
 ``` python
 deg1 = xr.open_dataset("../Data/Masks/fishMIP_regional_1mask_ISIMIP3a.nc")
 deg025 = xr.open_dataset("../Data/Masks/fishMIP_regional_025mask_ISIMIP3a.nc")
+deg05 = xr.open_dataset("../Data/Masks/fishMIP_regional_05mask_ISIMIP3a.nc")
 
+#Region names from R vector
 RME_names = r.names_regions
 
-#Create an empty dictionary
+#Create an empty dictionaries
 RME_mask1deg = []
 RME_mask025deg = []
+RME_mask05deg = []
 
 #Loop through each dictionary entry
-for da1deg, da025deg, rme in zip(deg1.RegionMask, deg025.RegionMask, RME_names):
+for da1deg, da05deg, da025deg, rme in zip(deg1.RegionMask, deg05.RegionMask, deg025.RegionMask, RME_names):
   da1deg = da1deg.drop_vars("Region")
+  da05deg = da05deg.drop_vars("Region")
   da025deg = da025deg.drop_vars("Region")
   #Adding dimension with LME name
   RME_mask1deg.append(da1deg.expand_dims(RME_name = [rme]))
+  RME_mask05deg.append(da05deg.expand_dims(RME_name = [rme]))
   RME_mask025deg.append(da025deg.expand_dims(RME_name = [rme]))
 
 #Creating multidimensional dataset
 RME_mask1deg = xr.concat(RME_mask1deg, dim = 'RME_name')
+RME_mask05deg = xr.concat(RME_mask05deg, dim = 'RME_name')
 RME_mask025deg = xr.concat(RME_mask025deg, dim = 'RME_name')
 
 #Check results
-RME_mask1deg; RME_mask025deg
-
-# RME_mask1deg.to_netcdf("../Data/Masks/fishMIP_regional_1degmask_ISIMIP3a.nc", mode = 'w')
-# RME_mask025deg.to_netcdf("../Data/Masks/fishMIP_regional_025degmask_ISIMIP3a.nc", mode = 'w')
+RME_mask1deg; RME_mask05deg; RME_mask025deg
 ```
 
     ## <xarray.DataArray 'RegionMask' (RME_name: 21, Latitude: 180, Longitude: 360)>
@@ -416,6 +431,59 @@ RME_mask1deg; RME_mask025deg
     ##     proj4:         +proj=longlat +datum=WGS84 +no_defs
     ##     min:           [ 1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  1.  ...
     ##     max:           [  1.   1.   1.   1.   1.   1.   1.   1.   1.   1.   1.   ...
+    ## <xarray.DataArray 'RegionMask' (RME_name: 21, Latitude: 360, Longitude: 720)>
+    ## array([[[nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         ...,
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan]],
+    ## 
+    ##        [[nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         ...,
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan]],
+    ## 
+    ##        [[nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         ...,
+    ## ...
+    ##         ...,
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan]],
+    ## 
+    ##        [[nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         ...,
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan]],
+    ## 
+    ##        [[nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         ...,
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan],
+    ##         [nan, nan, nan, ..., nan, nan, nan]]], dtype=float32)
+    ## Coordinates:
+    ##   * RME_name   (RME_name) object 'Baltic-Sea' ... 'Tasman-Golden-Bays-NZ'
+    ##   * Longitude  (Longitude) float64 -179.8 -179.2 -178.8 ... 178.8 179.2 179.8
+    ##   * Latitude   (Latitude) float64 89.75 89.25 88.75 ... -88.75 -89.25 -89.75
+    ## Attributes:
+    ##     units:         binary
+    ##     long_name:     Region Mask -- True or False
+    ##     grid_mapping:  crs
+    ##     proj4:         +proj=longlat +datum=WGS84 +no_defs
+    ##     min:           [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. ...
+    ##     max:           [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. ...
     ## <xarray.DataArray 'RegionMask' (RME_name: 21, Latitude: 720, Longitude: 1440)>
     ## array([[[nan, nan, nan, ..., nan, nan, nan],
     ##         [nan, nan, nan, ..., nan, nan, nan],
@@ -470,6 +538,12 @@ RME_mask1deg; RME_mask025deg
     ##     min:           [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. ...
     ##     max:           [1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. 1. ...
 
+``` python
+RME_mask1deg.to_netcdf("../Data/Masks/fishMIP_regional_1degmask_ISIMIP3a.nc", mode = 'w')
+RME_mask05deg.to_netcdf("../Data/Masks/fishMIP_regional_05degmask_ISIMIP3a.nc", mode = 'w')
+RME_mask025deg.to_netcdf("../Data/Masks/fishMIP_regional_025degmask_ISIMIP3a.nc", mode = 'w')
+```
+
 ### Checking results in R
 
 ``` r
@@ -481,6 +555,14 @@ deg1 <- stack("../Data/Masks/fishMIP_regional_1degmask_ISIMIP3a.nc", varname = "
     ## [1] "file name: C:\\Users\\ldfierro\\OneDrive - University of Tasmania\\FishMIP\\FishMIP_extracting-data\\Data\\Masks\\fishMIP_regional_1degmask_ISIMIP3a.nc"
 
 ``` r
+deg05 <- stack("../Data/Masks/fishMIP_regional_05degmask_ISIMIP3a.nc", varname = "RegionMask")
+```
+
+    ## [1] "vobjtovarid4: error #F: I could not find the requsted var (or dimvar) in the file!"
+    ## [1] "var (or dimvar) name: crs"
+    ## [1] "file name: C:\\Users\\ldfierro\\OneDrive - University of Tasmania\\FishMIP\\FishMIP_extracting-data\\Data\\Masks\\fishMIP_regional_05degmask_ISIMIP3a.nc"
+
+``` r
 deg025 <- stack("../Data/Masks/fishMIP_regional_025degmask_ISIMIP3a.nc", varname = "RegionMask")
 ```
 
@@ -489,7 +571,7 @@ deg025 <- stack("../Data/Masks/fishMIP_regional_025degmask_ISIMIP3a.nc", varname
     ## [1] "file name: C:\\Users\\ldfierro\\OneDrive - University of Tasmania\\FishMIP\\FishMIP_extracting-data\\Data\\Masks\\fishMIP_regional_025degmask_ISIMIP3a.nc"
 
 ``` r
-plot(deg1)
+plot(deg05)
 ```
 
 ![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/plot_stack-1.png)<!-- -->
@@ -601,3 +683,43 @@ ts_lme %>%
 ```
 
 ![](Creating_Your_Own_Mask_From_Shapefiles_files/figure-gfm/ts_plot-1.png)<!-- -->
+
+## Creating data frame with coordinates from rasters
+
+Tasman region not showing in 1 deg raster because its size is too small.
+
+``` r
+#1 degree raster
+deg1_df <- rasterToPoints(deg1) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = -c(x, y), names_to = "region") %>% 
+  drop_na(value) %>% 
+  rename("Lon" = "x", "Lat" = "y") %>% 
+  select(-value)
+
+#0.5 degree raster
+deg05_df <- rasterToPoints(deg05) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = -c(x, y), names_to = "region") %>% 
+  drop_na(value) %>%
+  rename("Lon" = "x", "Lat" = "y") %>% 
+  select(-value)
+
+#0.25 degree raster
+deg025_df <- rasterToPoints(deg025) %>% 
+  as.data.frame() %>% 
+  pivot_longer(cols = -c(x, y), names_to = "region") %>% 
+  drop_na(value) %>% 
+  rename("Lon" = "x", "Lat" = "y") %>% 
+  select(-value)
+
+#Saving results
+write.csv(deg1_df, file = "../Data/Masks/fishMIP_regional_1deg_ISIMIP3a.csv",
+          row.names = F)
+
+write.csv(deg05_df, file = "../Data/Masks/fishMIP_regional_05deg_ISIMIP3a.csv",
+          row.names = F)
+
+write.csv(deg025_df, file = "../Data/Masks/fishMIP_regional_025deg_ISIMIP3a.csv",
+          row.names = F)
+```
