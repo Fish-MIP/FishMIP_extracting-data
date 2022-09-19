@@ -10,7 +10,7 @@ Denisse Fierro Arcos
 
 This notebook will guide you through the steps of how to extract data
 using the `csv` masks created using the
-[`Creating_Your_Own_Mask_From_Shapefiles`](%22~/FishMIP_extracting-data/Scripts%22).
+[`Creating_Your_Own_Mask_From_Shapefiles`](%22~/FishMIP_extracting-data/Scripts/Creating_Your_Own_Mask_From_Shapefiles.md%22).
 
 ## Loading R libraries
 
