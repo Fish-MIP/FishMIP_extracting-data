@@ -5,33 +5,92 @@ Denisse Fierro Arcos
 
 -   [Introduction](#introduction)
 -   [Loading R libraries](#loading-r-libraries)
+-   [Defining relevant directories](#defining-relevant-directories)
+    -   [Obtaining list of files needed to create
+        summaries](#obtaining-list-of-files-needed-to-create-summaries)
+-   [Loading LME mask to extract
+    data](#loading-lme-mask-to-extract-data)
+-   [Defining function to merge files and extract
+    data](#defining-function-to-merge-files-and-extract-data)
 
 ## Introduction
 
 This notebook will guide you through the steps of how to extract data
 using the `csv` masks created using the
-[`Creating_Your_Own_Mask_From_Shapefiles`](%22~/FishMIP_extracting-data/Scripts/Creating_Your_Own_Mask_From_Shapefiles.md%22).
+[`Creating_Your_Own_Mask_From_Shapefiles`](%22Creating_Your_Own_Mask_From_Shapefiles.md%22).
 
 ## Loading R libraries
 
-<!-- # Libraries --------------------------------------------------------------- -->
-<!-- library(tidyverse) -->
-<!-- library(dtplyr) -->
-<!-- library(data.table) -->
-<!-- library(here) -->
-<!-- library(parallel) -->
-<!-- library(tictoc) -->
+``` r
+library(tidyverse)
+# library(dtplyr)
+# library(data.table)
+library(here)
+library(parallel)
+#library(tictoc)
+```
+
+## Defining relevant directories
+
+``` r
+yannick_dir <- "/rd/gem/private/users/yannickr"
+original_effort_dir <- "/rd/gem/private/users/yannickr/effort_mapped_bycountry"
+aggregated_files_dir <- "/rd/gem/private/users/ldfierro/effort_mapped_by_country_aggregated/"
+```
+
+### Obtaining list of files needed to create summaries
+
+``` r
+#Files located under the original effort directory
+original_effort_files <- list.files(original_effort_dir, pattern = ".csv")
+
+#Checking we got the correct files
+head(original_effort_files)
+```
+
+    ## [1] "mapped_1950_APW_100.csv" "mapped_1950_APW_104.csv"
+    ## [3] "mapped_1950_APW_12.csv"  "mapped_1950_APW_120.csv"
+    ## [5] "mapped_1950_APW_124.csv" "mapped_1950_APW_132.csv"
+
+## Loading LME mask to extract data
+
+For this example, we will be using the 0.5 degree mask for LMEs, which
+matches the resolution of the outputs that we will be used for these
+data extractions.
+
+``` r
+mask_df <- read_csv("../Data/Masks/fishMIP_regional_05deg_ISIMIP3a.csv")
+```
+
+    ## Rows: 16452 Columns: 3── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (1): region
+    ## dbl (2): Lon, Lat
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+#Check contents of mask
+head(mask_df)
+```
+
+    ## # A tibble: 6 × 3
+    ##     Lon   Lat region    
+    ##   <dbl> <dbl> <chr>     
+    ## 1  21.2  64.2 Baltic.Sea
+    ## 2  21.8  64.2 Baltic.Sea
+    ## 3  22.2  64.2 Baltic.Sea
+    ## 4  22.8  64.2 Baltic.Sea
+    ## 5  23.2  64.2 Baltic.Sea
+    ## 6  20.8  63.8 Baltic.Sea
+
+## Defining function to merge files and extract data
+
+Given that we have 29852 files to process, we will create a function
+before looping over all files.
+
 <!-- #Set select from dplyr as default -->
 <!-- select <- dplyr::select -->
-<!-- # Relevant directories ---------------------------------------------------- -->
-<!-- yannick_dir <- "/rd/gem/private/users/yannickr" -->
-<!-- original_effort_dir <- "/rd/gem/private/users/yannickr/effort_mapped_bycountry" -->
-<!-- aggregated_files_dir <- "/rd/gem/private/users/ldfierro/effort_mapped_by_country_aggregated/" -->
-<!-- #Getting list of files needed for the summaries -->
-<!-- original_effort_files <- list.files(file.path(original_effort_dir), pattern = ".csv") -->
-<!-- # RME dataframes ---------------------------------------------------------- -->
-<!-- deg1_df <- read_csv("Data/fishMIP_regional_1deg_ISIMIP3a.csv")  -->
-<!-- deg025_df <- read_csv("Data/fishMIP_regional_025deg_ISIMIP3a.csv") -->
 <!-- # Defining function to merge files ---------------------------------------- -->
 <!-- join_effort_data <- function(this_file_name, df, prefix_name){ -->
 <!--   this_source_path <- file.path(original_effort_dir, this_file_name) -->
