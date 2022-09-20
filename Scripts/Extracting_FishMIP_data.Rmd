@@ -77,6 +77,7 @@ join_effort_data <- function(file_name, mask, prefix_name){
     #Load original dataset
     these_data <- read_csv(this_source_path) %>% 
       lazy_dt()
+    
     #Join data from original effort files and masks using coordinates
     these_aggregated_data <-  these_data %>%
       left_join(mask, by = c("Lat", "Lon")) %>%
@@ -137,4 +138,3 @@ mclapply(X = newly_written_files, FUN = read_csv, mc.cores = 40) %>%
   #Saving resulting merged file to disk
   write_csv(paste0(aggregated_files_dir, "05deg/05deg_all_effort_aggregated.csv", sep = "/"))
 ```
-

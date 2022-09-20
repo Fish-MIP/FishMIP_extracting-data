@@ -40,3 +40,6 @@ vignettes/*.pdf
 
 #Jupyter cache files
 */__pycache__/
+
+#Shapefile folder
+*/Shapefiles_Regions/
