@@ -116,13 +116,17 @@ length(effort_list_split)
 
 ```{r}
 #Looping across list containing the smaller file chunks
-# for(i in seq_along(effort_list_split)){
-for(i in 3:60){
+for(i in seq_along(effort_list_split)){
   file_chunk <- effort_list_split[[i]]
   #Print message advising progress of data extraction
   message("Processing chunk #", i, " of ", length(effort_list_split))
   #Applying function to all elements within chunk
-  mclapply(X = file_chunk, FUN = join_effort_data, mask_df, "05deg", mc.cores = 40)
+  mclapply(X = file_chunk, FUN = join_effort_data, mask_df, "05deg", mc.cores = 8)
+  
+  #If the above parallelisation does not work, use the loop below
+  # for(j in seq_along(file_chunk)){
+  #   join_effort_data(file_chunk[j], mask_df, "05deg")
+  # }
 }
 ```
 
@@ -131,10 +135,12 @@ for(i in 3:60){
 #Getting list of all files saved in memory
 newly_written_files <- list.files(aggregated_files_dir, full.names = TRUE, recursive = T)
 
+out_file <- paste(aggregated_files_dir, "05deg/05deg_all_effort_aggregated.csv", sep = "/") 
+
 #Merging all files into a single file - Parallelising work
-mclapply(X = newly_written_files, FUN = read_csv, mc.cores = 40) %>% 
+mclapply(X = newly_written_files, FUN = read_csv, mc.cores = 8) %>% 
   #Unlisting and creating a single data frame
   bind_rows() %>%
   #Saving resulting merged file to disk
-  write_csv(paste0(aggregated_files_dir, "05deg/05deg_all_effort_aggregated.csv", sep = "/"))
+  write_csv(out_file)
 ```
