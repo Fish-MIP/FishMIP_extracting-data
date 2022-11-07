@@ -1,0 +1,202 @@
+---
+title: "Creating raster mask from FAO regions shapefile"
+author: "Denisse Fierro Arcos"
+date: "2022-11-07"
+output: 
+  github_document:
+    toc: true
+    html_preview: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This notebook will go through the process of creating a raster mask of the FAO major fishing areas available through its [WFS service](https://www.fao.org/fishery/geoserver/fifao/ows?service=WFS&request=GetFeature&version=1.0.0&typeName=fifao:FAO_AREAS_CWP). Rasters are created in `R` and the final details are done with `xarray` library for `Python`.
+
+## Loading R libraries
+
+```{r libraries, results = "hide", warnings = F, message = F}
+library(sf)
+library(raster)
+library(tidyverse)
+library(reticulate)
+```
+
+## Loading shapefiles
+
+A copy of the FAO Major Fishing Areas was saved locally from the [FAO's WFS service](https://www.fao.org/fishery/geoserver/fifao/ows?service=WFS&request=GetFeature&version=1.0.0&typeName=fifao:FAO_AREAS_CWP).
+
+```{r shapefiles_dirs}
+#Load shapefile with FAO regions
+fao_reg <- read_sf("../Data/FAO_shapefiles/FAO_MajorAreas.shp") %>% 
+  #Subset of columns
+  select(-c(F_LEVEL, F_STATUS, SUBOCEAN:F_SUBUNIT, NAME_FR:SURFACE)) %>% 
+  #Turning character columns into factors
+  mutate_if(is.character, as.factor)
+
+#We can check the results of the first two rows
+head(fao_reg, 2)
+```
+
+## Plotting FAO regions shapefile
+```{r plot_shapefile}
+#Loading land shapefile to include in plot
+land <- rnaturalearth::ne_countries(type = "countries", returnclass = "sf")
+#Plotting FAO shapefile
+fao_reg %>% 
+  ggplot()+
+  geom_sf(aes(fill = NAME_EN))+
+  geom_sf(data = land, inherit.aes = F, color = "gray")+
+  theme_bw()
+```
+
+## Extracting names and codes for FAO regions
+We will use this information to save correct names for regions in the raster
+
+```{r fao_keys}
+#Create a data frame of unique FAO regions
+fao_names_codes <- fao_reg %>% 
+  #Tranforming into data frame
+  st_drop_geometry() %>% 
+  #Extracting unique regions
+  distinct(F_CODE, NAME_EN) %>% 
+  #Ordering by region code
+  arrange(F_CODE) %>% 
+  #Fixing up names to use as raster layer name
+  mutate_all(as.character) %>% 
+  #Removing any spaces and commas from names and replacing with an underscore "_"
+  mutate(NAME_EN = str_remove(string = NAME_EN, pattern = ","), 
+         NAME_EN = str_replace_all(NAME_EN, " ", "_"))
+
+#We can check some of the results
+head(fao_names_codes, 2)
+```
+
+
+## Creating a multilayer raster mask based on merged shapefile
+We will now create multilayer mask, which match the resolution of the model forcings (1 deg). First, we will load the sample rasters.
+
+### Loading input rasters
+```{r load_rasters_input}
+#Loading 1 deg raster to be used as target for rasterising FAO regions
+deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+
+#Plotting raster
+plot(deg1)
+```
+
+### Defining function to create rasters from shapefiles
+We will define our own function that will use the shapefiles above to create rasters.
+
+```{r function_shp_raster}
+#Defining function which needs a shapefile and a raster as input
+shp_to_raster <- function(shp, nc_raster){
+  #The final raster will have ones where within the shapefile boundaries
+  rasterize(shp, nc_raster, field = 1)
+}
+
+```
+
+### Applying function to list containing all shapefiles
+
+```{r mapping_function}
+#Split shapefile into regions prior to transforming into raster
+fao_reg_list <- fao_reg %>% 
+  group_by(F_CODE) %>% 
+  group_split()
+
+#Applying function to raster list
+deg1_raster <- map(fao_reg_list, shp_to_raster, deg1) %>% 
+  #Stacking rasters to create a single multilayer raster
+  stack()
+
+#Checking results of stacked raster (first six regions)...
+plot(deg1_raster[[1:6]])
+```
+We will plot the shapefile to compare results.
+
+```{r}
+#...against shapefile, to make sure they match
+fao_reg %>% 
+  #Creating a new column with the code and name to identify them easily in graph
+  unite("reg_code", F_CODE, NAME_EN, remove = F) %>% 
+  ggplot()+
+  geom_sf(aes(fill = reg_code))+
+  facet_wrap(~F_CODE)
+```
+The results match! We can now save the results locally and move onto `Python` for the final touches.
+
+```{r}
+#Saving raster to disk
+writeRaster(deg1_raster, "../Data/Masks/FAO-regions_1degmask.nc", format = "CDF", overwrite = T,
+            varname = "FAO_regions", zname = "FAO_reg_name")
+
+#Saving FAO region keys
+fao_names_codes %>% 
+  write_csv("../Data/Masks/FAO-regions_1degmask_keys.csv")
+```
+
+# `Python`-based code
+We will now start `Python` and save the correct names for the FAO regions in the `netcdf` file we created in `R`.
+
+```{r}
+#Activating conda
+use_condaenv(Sys.getenv("RETICULATE_PYTHON"))
+```
+## Loading libraries
+
+```{python}
+import xarray as xr
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+```
+## Loading raster using `xarray`
+```{python}
+#Loading multilayer raster as dataset
+mask = xr.open_dataset("../Data/Masks/FAO-regions_1degmask.nc")
+#Checking saved file in R
+mask
+```
+Here we can see that the FAO region names are not saved correctly. They are numbered based on its location on the shapefile. We can update this using the data frame with the unique FAO regions we previously created.
+
+```{python}
+#We can simply load the data frame from the R environment.
+FAO_keys = r.fao_names_codes
+#We could also load it from our disk using the line below.
+#FAO_keys = pd.read_csv("../Data/Masks/FAO-regions_1degmask_keys.csv")
+
+#Checking list
+FAO_keys
+```
+We can now update the names on the `netcdf` file.
+
+```{python}
+#We will use the values in the data frame we loaded above
+mask['FAO_reg_name'] = FAO_keys.NAME_EN.tolist()
+
+#Checking results
+mask
+```
+## Plotting results
+We will plot all regions below to ensure we got them all correctly.
+```{python}
+#We will loop through each layer
+for reg in mask.FAO_regions:
+  #Plotting results
+  fig = plt.figure()
+  ax = fig.add_subplot(111)
+  reg.plot(ax = ax, levels = [1, 2])
+  plt.title(reg.FAO_reg_name.values.tolist())
+  plt.show()
+
+```
+When comparing to the shapefile plots in the `R` section of this notebook, we can see that the regions are named correctly. This means that we can save our results now.
+
+```{python}
+mask.to_netcdf("../Data/Masks/FAO-regions_corrected_1degmask.nc")
+```
+
