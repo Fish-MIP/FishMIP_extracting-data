@@ -29,7 +29,6 @@ area_DBEM = xr.open_dataset('Masks/area_05deg.nc').area
 file_list = glob(os.path.join(base_dir, "*/*/*/*nat_default_tcb_g*.nc"))
 #Removing any files for "picontrol" activity
 file_list = [f for f in file_list if "picontrol" not in f]
-#file_list = [f for f in file_list if "ZooMSS" not in f]
 
 #Saving names of experiments and ESMs to save results of work in the same directory structure
 dir_str = []
@@ -103,13 +102,13 @@ for f in file_hist:
         base_file_585 = re.split("global_", re.split("/", [d for d in future_paths if 'ssp585' in d][0])[-1])[0]
         #Loading datasets
         #Historical
+        #Get start and end years for data
+        yr_min_hist, yr_max_hist = re.split("_", re.findall("\d{4}_\d{4}", re.split("/", f)[-1])[0])
         try:
             ds = xr.open_dataset(f).sel(time = slice('1950', '2015'))
         except:
             print('Time in historical data is not cf compliant. Fixing dates based on years in file name.')
             try:
-                #Get start and end years for data
-                yr_min_hist, yr_max_hist = re.split("_", re.findall("\d{4}_\d{4}", re.split("/", f)[-1])[0])
                 ds = load_future(f, int(yr_min_hist), int(yr_max_hist)).sel(time = slice('1950', '2015'))
             except:
                 print(f'{f} could not be opened.')
@@ -129,7 +128,7 @@ for f in file_hist:
         ds_anom_126, ds_anom_per_126 = calc_anom(ds_126, ds_ref)
         ds_anom_585, ds_anom_per_585 = calc_anom(ds_585, ds_ref)
         #Calculating mean weighted yearly values per EEZ
-        if exp.lower() in ["dbpm", 'zoomss']:
+        if (exp.lower() == "dbpm") or ('ipsl' in esm.lower() and exp.lower() == 'zoomss'):
             eez_mask = eez_mask_DBPM
             area = area_DBPM
         elif exp.lower() == "dbem":
