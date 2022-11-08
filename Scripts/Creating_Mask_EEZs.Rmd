@@ -1,5 +1,5 @@
 ---
-title: "Creating raster mask from FAO regions shapefile"
+title: "Creating raster mask from EEZs of the world shapefile"
 author: "Denisse Fierro Arcos"
 date: "2022-11-07"
 output: 
@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Introduction
 
-This notebook will go through the process of creating a raster mask of the FAO major fishing areas available through its [WFS service](https://www.fao.org/fishery/geoserver/fifao/ows?service=WFS&request=GetFeature&version=1.0.0&typeName=fifao:FAO_AREAS_CWP). Rasters are created in `R` and the final details are done with `xarray` library for `Python`.
+The EEZs the of the world shapefile came from [VLIZ](https://doi.org/10.14284/386). Rasters are created in `R` and the final details are done with `xarray` library for `Python`.
 
 ## Loading R libraries
 
@@ -26,53 +26,54 @@ library(reticulate)
 ```
 
 ## Loading shapefiles
-
-A copy of the FAO Major Fishing Areas was saved locally from the [FAO's WFS service](https://www.fao.org/fishery/geoserver/fifao/ows?service=WFS&request=GetFeature&version=1.0.0&typeName=fifao:FAO_AREAS_CWP).
+The original shapefile contained a couple of errors:
+1. The country of Mauritius appeared as both Mauritius and Republic of Mauritius, however they both referred to the same country as their country code was the same for both: MUS.
+2. The United Kingdom appeared twice with two different countries codes. GBR has been kept as the unique code to represent this country.
+  
+The section below loads the file, selects a subset of columns of interest and corrects the errors identified above.
 
 ```{r shapefiles_dirs}
-#Load shapefile with FAO regions
-fao_reg <- read_sf("../Data/FAO_shapefiles/FAO_MajorAreas.shp") %>% 
+#Load shapefile with EEZ
+eez_world <- read_sf("../Data/World_EEZ_v11_20191118/eez_v11.shp") %>%
   #Subset of columns
-  select(-c(F_LEVEL, F_STATUS, SUBOCEAN:F_SUBUNIT, NAME_FR:SURFACE)) %>% 
+  select(-c(MRGID, MRGID_TER1, MRGID_SOV1:ISO_TER1, MRGID_TER2:Y_1, ISO_SOV2:UN_TER3)) %>% 
+  #Fixing issues with coding of countries
+  mutate(SOVEREIGN1 = case_when(ISO_SOV1 == "MUS" ~ "Mauritius",
+                                T ~ SOVEREIGN1),
+         ISO_SOV1 = case_when(SOVEREIGN1 == "United Kingdom" ~ "GBR",
+                              T ~ ISO_SOV1)) %>% 
   #Turning character columns into factors
   mutate_if(is.character, as.factor)
 
 #We can check the results of the first two rows
-head(fao_reg, 2)
+head(eez_world, 2)
 ```
 
 ## Plotting FAO regions shapefile
 ```{r plot_shapefile}
 #Loading land shapefile to include in plot
 land <- rnaturalearth::ne_countries(type = "countries", returnclass = "sf")
+
 #Plotting FAO shapefile
-fao_reg %>% 
+eez_world %>% 
   ggplot()+
-  geom_sf(aes(fill = NAME_EN))+
+  geom_sf(aes(fill = SOVEREIGN1))+
   geom_sf(data = land, inherit.aes = F, color = "gray")+
-  theme_bw()
+  theme_bw()+
+  theme(legend.position = "none")
 ```
 
-## Extracting names and codes for FAO regions
+## Extracting names and codes for EEZ
 We will use this information to save correct names for regions in the raster
 
-```{r fao_keys}
+```{r eez_keys}
 #Create a data frame of unique FAO regions
-fao_names_codes <- fao_reg %>% 
-  #Tranforming into data frame
-  st_drop_geometry() %>% 
-  #Extracting unique regions
-  distinct(F_CODE, NAME_EN) %>% 
-  #Ordering by region code
-  arrange(F_CODE) %>% 
-  #Fixing up names to use as raster layer name
-  mutate_all(as.character) %>% 
-  #Removing any spaces and commas from names and replacing with an underscore "_"
-  mutate(NAME_EN = str_remove(string = NAME_EN, pattern = ","), 
-         NAME_EN = str_replace_all(NAME_EN, " ", "_"))
+eez_names_codes <-  eez_world %>% 
+  group_by(SOVEREIGN1) %>% 
+  group_keys()
 
 #We can check some of the results
-head(fao_names_codes, 2)
+head(eez_names_codes, 2)
 ```
 
 
@@ -83,10 +84,28 @@ We will now create multilayer mask, which match the resolution of the model forc
 ```{r load_rasters_input}
 #Loading 1 deg raster to be used as target for rasterising FAO regions
 deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+#Sample from DBPM model
+#deg1 <- raster("../Data/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
+#Sample from DBEM model
+#deg05 <- raster("../Data/dbem_gfdl-esm4_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
 
 #Plotting raster
-plot(deg_area)
+plot(deg1)
 ```
+### Calculate grid area
+The `raster` package allows us to calculate the area of grid cells in $km^2$ in just one line of code. We can save this to calculate weighted means by area. We will use the raster above as a base, and we will save the result on our disk.
+
+```{r, eval = FALSE}
+#Calculating grid area
+deg_area <- area(deg1)
+
+#Saving results
+writeRaster(deg_area, "../Data/InputRasters/area_1deg.nc", format = "CDF", overwrite = T, 
+            #We will save the variable names so they match the Fish-MIP models
+            varname = "area", xname = "lon", yname = "lat", varunit = "km2")
+```
+
+
 
 ### Defining function to create rasters from shapefiles
 We will define our own function that will use the shapefiles above to create rasters.
@@ -104,39 +123,23 @@ shp_to_raster <- function(shp, nc_raster){
 
 ```{r mapping_function}
 #Split shapefile into regions prior to transforming into raster
-fao_reg_list <- fao_reg %>% 
-  group_by(F_CODE) %>% 
+eez_list <- eez_world %>% 
+  group_by(SOVEREIGN1) %>% 
   group_split()
 
 #Applying function to raster list
-deg1_raster <- map(fao_reg_list, shp_to_raster, deg1) %>% 
+deg1_raster <- map(eez_list, shp_to_raster, deg1) %>% 
   #Stacking rasters to create a single multilayer raster
   stack()
 
 #Checking results of stacked raster (first six regions)...
 plot(deg1_raster[[1:6]])
 ```
-We will plot the shapefile to compare results.
 
-```{r}
-#...against shapefile, to make sure they match
-fao_reg %>% 
-  #Creating a new column with the code and name to identify them easily in graph
-  unite("reg_code", F_CODE, NAME_EN, remove = F) %>% 
-  ggplot()+
-  geom_sf(aes(fill = reg_code))+
-  facet_wrap(~F_CODE)
-```
-The results match! We can now save the results locally and move onto `Python` for the final touches.
-
-```{r}
+```{r, eval = F}
 #Saving raster to disk
-writeRaster(deg1_raster, "../Data/Masks/FAO-regions_1degmask.nc", format = "CDF", overwrite = T,
-            varname = "FAO_regions", zname = "FAO_reg_name")
-
-#Saving FAO region keys
-fao_names_codes %>% 
-  write_csv("../Data/Masks/FAO-regions_1degmask_keys.csv")
+writeRaster(deg1_raster, "../Data/Masks/EEZ-world_05degmask_DBEM.nc", format = "CDF", overwrite = T,
+            varname = "EEZ_regions", zname = "Country_EEZ")
 ```
 
 # `Python`-based code
@@ -157,7 +160,7 @@ import pandas as pd
 ## Loading raster using `xarray`
 ```{python}
 #Loading multilayer raster as dataset
-mask = xr.open_dataset("../Data/Masks/FAO-regions_1degmask.nc")
+mask = xr.open_dataset("../Data/Masks/EEZ-world_1degmask.nc")
 #Checking saved file in R
 mask
 ```
@@ -165,43 +168,40 @@ Here we can see that the FAO region names are not saved correctly. They are numb
 
 ```{python}
 #We can simply load the data frame from the R environment.
-FAO_keys = r.fao_names_codes
-#We could also load it from our disk using the line below.
-#FAO_keys = pd.read_csv("../Data/Masks/FAO-regions_1degmask_keys.csv")
+eez_keys = r.eez_names_codes
 
 #Checking list
-FAO_keys
+eez_keys
 ```
 We can now update the names on the `netcdf` file.
 
 ```{python}
 #We will use the values in the data frame we loaded above
-mask['FAO_reg_name'] = FAO_keys.NAME_EN.tolist()
+new_mask = []
+for i, j in enumerate(mask.EEZ_regions):
+  new_mask.append(j.drop('Country_EEZ').expand_dims({'Country': [eez_keys.SOVEREIGN1.iloc[i]]}))
 
-#Checking results
-mask = mask.rename({'latitude': 'lat', 'longitude': 'lon'})
+new_mask = xr.concat(new_mask, dim = 'Country').to_dataset()
+new_mask = new_mask.rename({'latitude': 'lat', 'longitude': 'lon'})
+
 ```
 ## Plotting results
 We will plot all regions below to ensure we got them all correctly.
 ```{python}
-#We will loop through each layer
-for reg in mask.FAO_regions:
+#We will loop through the first five to check results
+for reg in new_mask.EEZ_regions[0:5]:
   #Plotting results
   fig = plt.figure()
   ax = fig.add_subplot(111)
   reg.plot(ax = ax, levels = [1, 2])
-  plt.title(reg.FAO_reg_name.values.tolist())
+  plt.title(reg.Country.values.tolist())
   plt.show()
 
 ```
 When comparing to the shapefile plots in the `R` section of this notebook, we can see that the regions are named correctly. This means that we can save our results now.
 
-```{python}
-mask.to_netcdf("../Data/Masks/FAO-regions_corrected_1degmask.nc")
+```{python, eval = F}
+new_mask.to_netcdf("../Data/Masks/EEZ-world-corrected_1degmask.nc")
 ```
-
-
-#Turn the nc file to csv for masking
-#Do the same for EEZs
 
 
