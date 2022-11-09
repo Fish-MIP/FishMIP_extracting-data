@@ -47,6 +47,9 @@ eez_world <- read_sf("../Data/World_EEZ_v11_20191118/eez_v11.shp") %>%
 
 #We can check the results of the first two rows
 head(eez_world, 2)
+
+eez_world %>% st_write("../Data/World_EEZ_v11_20191118/eez_corrected.shp")
+
 ```
 
 ## Plotting FAO regions shapefile
