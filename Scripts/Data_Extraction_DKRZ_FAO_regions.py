@@ -161,7 +161,7 @@ for f in file_hist:
         #Get start and end years for data
         yr_min_hist, yr_max_hist = re.split("_", re.findall("\d{4}_\d{4}", re.split("/", f)[-1])[0])
         try:
-            ds = xr.open_dataset(f).sel(time = slice('1950', '2015'), chunks={'time': 12})
+            ds = xr.open_dataset(f).sel(time = slice('1950', '2015'))
         except:
             print('Time in historical data is not cf compliant. Fixing dates based on years in file name.')
             try:
@@ -172,6 +172,10 @@ for f in file_hist:
         yr_min_fut, yr_max_fut = re.split("_", re.findall("\d{4}_\d{4}", re.split("/", future_paths[0])[-1])[0])
         ds_126 = load_ds_noncf([d for d in future_paths if 'ssp126' in d][0], int(yr_min_fut), int(yr_max_fut))
         ds_585 = load_ds_noncf([d for d in future_paths if 'ssp585' in d][0], int(yr_min_fut), int(yr_max_fut))
+        if exp.lower() == "feisty" and 'gfdl' in esm.lower():
+            ds = ds.chunk({'time': 12})
+            ds_126 = ds_126.chunk({'time': 12})
+            ds_585 = ds_585.chunk({'time': 12})
         #Ensure flag values 1e20 are masked
         if (~np.isfinite(ds[var_int])).sum() == 0:
             ds = ds.where(ds < 1e20)
@@ -191,5 +195,3 @@ for f in file_hist:
         ds_yr_mean, ds_anom_per, ref_ds = weighted_means(ds[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out, base_file))
         ds_yr_mean_126, ds_anom_per_126 = weighted_means(ds_126[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_126), ref_ds = ref_ds)
         ds_yr_mean_585, ds_anom_per_585 = weighted_means(ds_585[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_585), ref_ds = ref_ds)
-        
-
