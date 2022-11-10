@@ -49,16 +49,26 @@ file_list = [f for f in file_list if "picontrol" not in f]
 
 #Saving names of experiments and ESMs to save results of work in the same directory structure
 dir_str = []
+#Getting list of experiments
 for exp in os.listdir(base_dir):
     dir_list = [os.path.join(exp, e) for e in os.listdir(os.path.join(base_dir, exp))]
+    #For each experiment get a list of ESMs
     for esm in dir_list:
         dir_list = [os.path.join(esm, a) for a in os.listdir(os.path.join(base_dir, esm))]
+        #For each experiment and ESM combination, get a list of files
         for d in dir_list:
             dir_str.append(d)
 
-#Loading future projections
+#Loading data that is not CF compliant
 def load_ds_noncf(fn, start, end):
-    ds = xr.open_dataset(fn, decode_times = False)
+    '''
+    This function loads non-CF compliant datasets where dates cannot be read. It takes the following inputs:
+    fn - ('string') refers to full filepath where the non-CF compliant dataset is located
+    start - ('numeric') refers to the start year of the dataset
+    end - ('numeric') refers to the end year of the dataset
+    The start and end parameters are used to present dates correctly in the time dimension
+    '''
+    ds = xr.open_dataset(fn, decode_times = False, chunks={'time': 12})
     #Get start and end years for projections
     years = (end-start)+1
     if len(ds.time)/years == 1:
@@ -68,25 +78,56 @@ def load_ds_noncf(fn, start, end):
     ds['time'] = pd.date_range(f'{start}-01-01', periods = len(ds.time), freq = freq)
     return ds
 
-#Defining function to calculate weighted means
-def weighted_means(ds, weight, mask):
+#Defining function to calculate weighted means and anomalies in relation to values in the 90s
+def weighted_means(ds, weight, mask, file_out, **kwargs):
+    '''
+    This function calculated weighted means per year and yearly anomalies in relation to values 
+    in the decade between 1990 and 1999. It takes the following inputs:
+    ds - ('data array') refers to data array containing data upon which means will be calculated
+    weight - ('data array') contains weights to be used in weighted mean calculation
+    mask - ('data array') contains boundaries within which weighted means will be calculated
+    file_out - ('string') contains the file path and base file name to be used to save results
+
+    **Optional
+    ref_ds - ('data array') containing the mean for the reference period. If non is provided, the
+    function returns a data array containing this information.
+    '''
     yr_means = []
     yr_anom = []
-    for eez in mask.EEZ_regions:
-        #Applying EEZ mask
-        masked_ds = ds*eez
-        #Calculate weights using grid cell area
+    if 'ref_ds' not in kwargs.keys():
+        ref_ds = []
+    else:
+        ref_ds = kwargs.get('ref_ds')
+    for eez in mask:
+        #Masked grid cell area and calculate weights per EEZ
         weights = weight*eez
         weights = weights/weights.sum()
         #Save results in list
-        yr_mean_sec = (masked_ds*weights).groupby('time.year').sum(('lon', 'lat'))
-        ref = yr_mean_sec.sel(time = slice('1990', '1999')).mean('time')
+        yr_mean_sec = (ds*weights).groupby('time.year').sum(('lon', 'lat', 'time'))
+        if 'ref_ds' in kwargs.keys():
+            ref = ref_ds.sel(Country = eez.Country.values)
+        else:
+            ref = yr_mean_sec.sel(year = slice('1990', '1999')).mean('year')
         yr_change = ((yr_mean_sec-ref)/ref)*100
         yr_means.append(yr_mean_sec)
         yr_anom.append(yr_change)
+        if 'ref_ds' not in kwargs.keys():
+            ref_ds.append(ref)
     yr_means = xr.concat(yr_means, dim = 'Country').to_dataset('Country').to_dataframe()
     yr_anom = xr.concat(yr_anom, dim = 'Country').to_dataset('Country').to_dataframe()
-    return yr_means, yr_anom
+    if 'ref_ds' not in kwargs.keys():
+        ref_ds = xr.concat(ref_ds, dim = 'Country')
+    #Save results
+    yr_min = str(yr_change.year.values.min())
+    yr_max = str(yr_change.year.values.max())
+    path_out_mean = f'{file_out}global_weighted_mean_abs_{yr_min}_{yr_max}.csv'
+    path_out_anom = f'{file_out}global_weighted_mean_per_{yr_min}_{yr_max}.csv'
+    yr_means.to_csv(path_out_mean, na_rep = np.nan)
+    yr_anom.to_csv(path_out_anom, na_rep = np.nan)
+    if 'ref_ds' in kwargs.keys():
+        return yr_means, yr_anom
+    else:
+        return yr_means, yr_anom, ref_ds
 
 #Getting list of historical and future projection experiments
 file_hist = [f for f in file_list if "historical" in f]
@@ -120,7 +161,7 @@ for f in file_hist:
         #Get start and end years for data
         yr_min_hist, yr_max_hist = re.split("_", re.findall("\d{4}_\d{4}", re.split("/", f)[-1])[0])
         try:
-            ds = xr.open_dataset(f).sel(time = slice('1950', '2015'))
+            ds = xr.open_dataset(f).sel(time = slice('1950', '2015'), chunks={'time': 12})
         except:
             print('Time in historical data is not cf compliant. Fixing dates based on years in file name.')
             try:
@@ -146,23 +187,9 @@ for f in file_hist:
         else:
             eez_mask = eez_mask_all
             area = area_all
-        #Calculating mean weighted yearly values per EEZ
-        ds_yr_mean, ds_anom_per = weighted_means(ds[var_int], area, eez_mask)
-        ds_yr_mean_126, ds_anom_per_126 = weighted_means(ds_126[var_int], area, eez_mask)
-        ds_yr_mean_585, ds_anom_per_585 = weighted_means(ds_585[var_int], area, eez_mask)
-        #Getting output path
-        mean_yr_out = os.path.join(path_out, (f'{base_file}_global_weighted_mean_abs_{yr_min_hist}_{yr_max_hist}.csv'))
-        anom_out_per = os.path.join(path_out, (f'{base_file}_global_weighted_mean_per_{yr_min_hist}_{yr_max_hist}.csv'))
-        mean_yr_out_126 = os.path.join(path_out_future, (f'{base_file_126}_global_weighted_mean_abs_{yr_min_fut}_{yr_max_fut}.csv'))
-        anom_out_per_126 = os.path.join(path_out_future, (f'{base_file_126}_global_weighted_mean_per_{yr_min_fut}_{yr_max_fut}.csv'))
-        mean_yr_out_585 = os.path.join(path_out_future, (f'{base_file_585}_global_weighted_mean_abs_{yr_min_fut}_{yr_max_fut}.csv'))
-        anom_out_per_585 = os.path.join(path_out_future, (f'{base_file_585}_global_weighted_mean_per_{yr_min_fut}_{yr_max_fut}.csv'))
-        #Saving outputs
-        ds_yr_mean.to_csv(mean_yr_out, na_rep = np.nan)
-        ds_anom_per.to_csv(anom_out_per, na_rep = np.nan)
-        ds_yr_mean_126.to_csv(mean_yr_out_126, na_rep = np.nan)
-        ds_anom_per_126.to_csv(anom_out_per_126, na_rep = np.nan)
-        ds_yr_mean_585.to_csv(mean_yr_out_585, na_rep = np.nan)
-        ds_anom_per_585.to_csv(anom_out_per_585, na_rep = np.nan)
+        #Calculating mean weighted yearly values per EEZ and saving to disk
+        ds_yr_mean, ds_anom_per, ref_ds = weighted_means(ds[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out, base_file))
+        ds_yr_mean_126, ds_anom_per_126 = weighted_means(ds_126[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_126), ref_ds = ref_ds)
+        ds_yr_mean_585, ds_anom_per_585 = weighted_means(ds_585[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_585), ref_ds = ref_ds)
         
 
