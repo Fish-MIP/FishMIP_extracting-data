@@ -68,7 +68,7 @@ def load_ds_noncf(fn, start, end):
     end - ('numeric') refers to the end year of the dataset
     The start and end parameters are used to present dates correctly in the time dimension
     '''
-    ds = xr.open_dataset(fn, decode_times = False, chunks={'time': 12})
+    ds = xr.open_dataset(fn, decode_times = False)
     #Get start and end years for projections
     years = (end-start)+1
     if len(ds.time)/years == 1:
