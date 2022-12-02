@@ -3,37 +3,39 @@ Creating raster mask from EEZs of the world shapefile
 Denisse Fierro Arcos
 2022-11-07
 
--   <a href="#introduction" id="toc-introduction">Introduction</a>
--   <a href="#loading-r-libraries" id="toc-loading-r-libraries">Loading R
+- <a href="#introduction" id="toc-introduction">Introduction</a>
+- <a href="#loading-r-libraries" id="toc-loading-r-libraries">Loading R
+  libraries</a>
+- <a href="#loading-shapefiles" id="toc-loading-shapefiles">Loading
+  shapefiles</a>
+- <a href="#plotting-fao-regions-shapefile"
+  id="toc-plotting-fao-regions-shapefile">Plotting FAO regions
+  shapefile</a>
+- <a href="#extracting-names-and-codes-for-eez"
+  id="toc-extracting-names-and-codes-for-eez">Extracting names and codes
+  for EEZ</a>
+- <a href="#creating-a-multilayer-raster-mask-based-on-merged-shapefile"
+  id="toc-creating-a-multilayer-raster-mask-based-on-merged-shapefile">Creating
+  a multilayer raster mask based on merged shapefile</a>
+  - <a href="#loading-input-rasters" id="toc-loading-input-rasters">Loading
+    input rasters</a>
+  - <a href="#calculate-grid-area" id="toc-calculate-grid-area">Calculate
+    grid area</a>
+  - <a href="#defining-function-to-create-rasters-from-shapefiles"
+    id="toc-defining-function-to-create-rasters-from-shapefiles">Defining
+    function to create rasters from shapefiles</a>
+  - <a href="#applying-function-to-list-containing-all-shapefiles"
+    id="toc-applying-function-to-list-containing-all-shapefiles">Applying
+    function to list containing all shapefiles</a>
+- <a href="#python-based-code"
+  id="toc-python-based-code"><code>Python</code>-based code</a>
+  - <a href="#loading-libraries" id="toc-loading-libraries">Loading
     libraries</a>
--   <a href="#loading-shapefiles" id="toc-loading-shapefiles">Loading
-    shapefiles</a>
--   <a href="#plotting-fao-regions-shapefile"
-    id="toc-plotting-fao-regions-shapefile">Plotting FAO regions
-    shapefile</a>
--   <a href="#extracting-names-and-codes-for-eez"
-    id="toc-extracting-names-and-codes-for-eez">Extracting names and codes
-    for EEZ</a>
--   <a href="#creating-a-multilayer-raster-mask-based-on-merged-shapefile"
-    id="toc-creating-a-multilayer-raster-mask-based-on-merged-shapefile">Creating
-    a multilayer raster mask based on merged shapefile</a>
-    -   <a href="#loading-input-rasters" id="toc-loading-input-rasters">Loading
-        input rasters</a>
-    -   <a href="#defining-function-to-create-rasters-from-shapefiles"
-        id="toc-defining-function-to-create-rasters-from-shapefiles">Defining
-        function to create rasters from shapefiles</a>
-    -   <a href="#applying-function-to-list-containing-all-shapefiles"
-        id="toc-applying-function-to-list-containing-all-shapefiles">Applying
-        function to list containing all shapefiles</a>
--   <a href="#python-based-code"
-    id="toc-python-based-code"><code>Python</code>-based code</a>
-    -   <a href="#loading-libraries" id="toc-loading-libraries">Loading
-        libraries</a>
-    -   <a href="#loading-raster-using-xarray"
-        id="toc-loading-raster-using-xarray">Loading raster using
-        <code>xarray</code></a>
-    -   <a href="#plotting-results" id="toc-plotting-results">Plotting
-        results</a>
+  - <a href="#loading-raster-using-xarray"
+    id="toc-loading-raster-using-xarray">Loading raster using
+    <code>xarray</code></a>
+  - <a href="#plotting-results" id="toc-plotting-results">Plotting
+    results</a>
 
 ## Introduction
 
@@ -65,13 +67,8 @@ interest and corrects the errors identified above.
 ``` r
 #Load shapefile with EEZ
 eez_world <- read_sf("../Data/World_EEZ_v11_20191118/eez_v11.shp") %>%
-  #Subset of columns
-  select(-c(MRGID, MRGID_TER1, MRGID_SOV1:ISO_TER1, MRGID_TER2:Y_1, ISO_SOV2:UN_TER3)) %>% 
-  #Fixing issues with coding of countries
-  mutate(SOVEREIGN1 = case_when(ISO_SOV1 == "MUS" ~ "Mauritius",
-                                T ~ SOVEREIGN1),
-         ISO_SOV1 = case_when(SOVEREIGN1 == "United Kingdom" ~ "GBR",
-                              T ~ ISO_SOV1)) %>% 
+   #Subset of columns
+  select(MRGID, GEONAME, POL_TYPE, SOVEREIGN1, SOVEREIGN2, SOVEREIGN3, AREA_KM2) %>% 
   #Turning character columns into factors
   mutate_if(is.character, as.factor)
 
@@ -79,18 +76,36 @@ eez_world <- read_sf("../Data/World_EEZ_v11_20191118/eez_v11.shp") %>%
 head(eez_world, 2)
 ```
 
-    ## Simple feature collection with 2 features and 6 fields
+    ## Simple feature collection with 2 features and 7 fields
     ## Geometry type: MULTIPOLYGON
     ## Dimension:     XY
     ## Bounding box:  xmin: -173.7747 ymin: -17.55527 xmax: -10.93248 ymax: -4.537529
     ## Geodetic CRS:  WGS 84
-    ## # A tibble: 2 × 7
-    ##   GEONAME      POL_T…¹ SOVER…² MRGID…³ AREA_…⁴ ISO_S…⁵                  geometry
-    ##   <fct>        <fct>   <fct>     <dbl>   <dbl> <fct>          <MULTIPOLYGON [°]>
-    ## 1 American Sa… 200NM   United…    8444  405830 USA     (((-166.6411 -17.55527, …
-    ## 2 Ascension E… 200NM   United…    8379  446005 GBR     (((-10.93328 -7.887451, …
-    ## # … with abbreviated variable names ¹​POL_TYPE, ²​SOVEREIGN1, ³​MRGID_EEZ,
-    ## #   ⁴​AREA_KM2, ⁵​ISO_SOV1
+    ## # A tibble: 2 × 8
+    ##   MRGID GEONAME                          POL_T…¹ SOVER…² SOVER…³ SOVER…⁴ AREA_…⁵
+    ##   <dbl> <fct>                            <fct>   <fct>   <fct>   <fct>     <dbl>
+    ## 1  8444 American Samoa Exclusive Econom… 200NM   United… <NA>    <NA>     405830
+    ## 2  8379 Ascension Exclusive Economic Zo… 200NM   United… <NA>    <NA>     446005
+    ## # … with 1 more variable: geometry <MULTIPOLYGON [°]>, and abbreviated variable
+    ## #   names ¹​POL_TYPE, ²​SOVEREIGN1, ³​SOVEREIGN2, ⁴​SOVEREIGN3, ⁵​AREA_KM2
+
+``` r
+#Save key to identify EEZ and countries associated with them from extracted data files
+eez_names_codes <- eez_world %>% 
+  st_drop_geometry()
+```
+
+Saving the shapefile and keys for reference.
+
+``` r
+#Saving the corrected shapefile
+eez_world %>% 
+  st_write("../Data/World_EEZ_v11_20191118/eez_short.shp", delete_layer = T)
+
+#Saving keys
+eez_names_codes %>% 
+  write_csv("../Data/World_EEZ_v11_20191118/eez_key.csv")
+```
 
 ## Plotting FAO regions shapefile
 
@@ -116,8 +131,8 @@ raster
 
 ``` r
 #Create a data frame of unique FAO regions
-eez_names_codes <-  eez_world %>% 
-  group_by(SOVEREIGN1) %>% 
+eez_names_codes <-  eez_names_codes %>% 
+  group_by(MRGID) %>% 
   group_keys()
 
 #We can check some of the results
@@ -125,10 +140,10 @@ head(eez_names_codes, 2)
 ```
 
     ## # A tibble: 2 × 1
-    ##   SOVEREIGN1
-    ##   <fct>     
-    ## 1 Albania   
-    ## 2 Algeria
+    ##   MRGID
+    ##   <dbl>
+    ## 1  3293
+    ## 2  5668
 
 ## Creating a multilayer raster mask based on merged shapefile
 
@@ -147,16 +162,25 @@ deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_glo
 ``` r
 #Sample from DBPM model
 #deg1 <- raster("../Data/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
+#Sample from DBEM model
+#deg05 <- raster("../Data/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
 
 #Plotting raster
 plot(deg1)
 ```
 
 ![](Creating_Mask_EEZs_files/figure-gfm/load_rasters_input-1.png)<!-- -->
-\### Calculate grid area The `raster` package allows us to calculate the
-area of grid cells in $km^2$ in just one line of code. We can save this
-to calculate weighted means by area. We will use the raster above as a
-base, and we will save the result on our disk.
+
+``` r
+#plot(deg05)
+```
+
+### Calculate grid area
+
+The `raster` package allows us to calculate the area of grid cells in
+$km^2$ in just one line of code. We can save this to calculate weighted
+means by area. We will use the raster above as a base, and we will save
+the result on our disk.
 
 ``` r
 #Calculating grid area
@@ -186,7 +210,7 @@ shp_to_raster <- function(shp, nc_raster){
 ``` r
 #Split shapefile into regions prior to transforming into raster
 eez_list <- eez_world %>% 
-  group_by(SOVEREIGN1) %>% 
+  group_by(MRGID) %>% 
   group_split()
 
 #Applying function to raster list
@@ -194,15 +218,15 @@ deg1_raster <- map(eez_list, shp_to_raster, deg1) %>%
   #Stacking rasters to create a single multilayer raster
   stack()
 
-#Checking results of stacked raster (first six regions)...
-plot(deg1_raster[[1:6]])
+#Checking results of stacked raster (selected Australian EEZs)...
+plot(deg1_raster[[c(31:34, 45, 103)]])
 ```
 
 ![](Creating_Mask_EEZs_files/figure-gfm/mapping_function-1.png)<!-- -->
 
 ``` r
 #Saving raster to disk
-writeRaster(deg1_raster, "../Data/Masks/EEZ-world_1degmask_DBPM.nc", format = "CDF", overwrite = T,
+writeRaster(deg1_raster, "../Data/Masks/EEZ-world_1degmask.nc", format = "CDF", overwrite = T,
             varname = "EEZ_regions", zname = "Country_EEZ")
 ```
 
@@ -215,6 +239,9 @@ regions in the `netcdf` file we created in `R`.
 #Activating conda
 use_condaenv(Sys.getenv("RETICULATE_PYTHON"))
 ```
+
+    ## Warning in use_condaenv(Sys.getenv("RETICULATE_PYTHON")): path supplied to use_condaenv() is not a conda python:
+    ##  C:/Users/ldfierro/OneDrive - University of Tasmania/FishMIP/FishMIP_extracting-data/FishMIP_env_Python/python.exe
 
 ## Loading libraries
 
@@ -235,24 +262,24 @@ import pandas as pd
 
 ``` python
 #Loading multilayer raster as dataset
-mask = xr.open_dataset("../Data/Masks/EEZ-world_1degmask_DBPM.nc")
+mask = xr.open_dataset("../Data/Masks/EEZ-world_1degmask.nc")
 #Checking saved file in R
 mask
 ```
 
     ## <xarray.Dataset>
-    ## Dimensions:      (longitude: 360, latitude: 180, Country_EEZ: 157)
+    ## Dimensions:      (longitude: 360, latitude: 180, Country_EEZ: 281)
     ## Coordinates:
-    ##   * longitude    (longitude) float64 -180.0 -179.0 -178.0 ... 177.0 178.0 179.0
+    ##   * longitude    (longitude) float64 -179.5 -178.5 -177.5 ... 177.5 178.5 179.5
     ##   * latitude     (latitude) float64 89.5 88.5 87.5 86.5 ... -87.5 -88.5 -89.5
-    ##   * Country_EEZ  (Country_EEZ) int32 1 2 3 4 5 6 7 ... 152 153 154 155 156 157
+    ##   * Country_EEZ  (Country_EEZ) int32 1 2 3 4 5 6 7 ... 276 277 278 279 280 281
     ## Data variables:
     ##     crs          int32 ...
     ##     EEZ_regions  (Country_EEZ, latitude, longitude) float32 ...
     ## Attributes:
     ##     Conventions:  CF-1.4
     ##     created_by:   R, packages ncdf4 and raster (version 3.5-29)
-    ##     date:         2022-11-08 10:26:51
+    ##     date:         2022-12-02 13:13:36
 
 Here we can see that the FAO region names are not saved correctly. They
 are numbered based on its location on the shapefile. We can update this
@@ -266,31 +293,38 @@ eez_keys = r.eez_names_codes
 eez_keys
 ```
 
-    ##               SOVEREIGN1
-    ## 0                Albania
-    ## 1                Algeria
-    ## 2                 Angola
-    ## 3             Antarctica
-    ## 4    Antigua and Barbuda
-    ## ..                   ...
-    ## 152              Vanuatu
-    ## 153            Venezuela
-    ## 154              Vietnam
-    ## 155       Western Sahara
-    ## 156                Yemen
+    ##        MRGID
+    ## 0     3293.0
+    ## 1     5668.0
+    ## 2     5669.0
+    ## 3     5670.0
+    ## 4     5672.0
+    ## ..       ...
+    ## 276  50167.0
+    ## 277  50170.0
+    ## 278  62589.0
+    ## 279  62596.0
+    ## 280  62598.0
     ## 
-    ## [157 rows x 1 columns]
+    ## [281 rows x 1 columns]
 
-We can now update the names on the `netcdf` file.
+We can now update the names on the `netcdf` file using the ID codes for
+each EEZ.
 
 ``` python
 #We will use the values in the data frame we loaded above
-new_mask = []
-for i, j in enumerate(mask.EEZ_regions):
-  new_mask.append(j.drop('Country_EEZ').expand_dims({'Country': [eez_keys.SOVEREIGN1.iloc[i]]}))
+mask['Country_EEZ'] = [int(i) for i in eez_keys.MRGID]
+```
 
-new_mask = xr.concat(new_mask, dim = 'Country').to_dataset()
-new_mask = new_mask.rename({'latitude': 'lat', 'longitude': 'lon'})
+We will load the full keys into memory and we will select all EEZ areas
+for Australia to ensure masks are correct.
+
+``` python
+#Loading keys
+eez_full_keys = pd.read_csv('../Data/World_EEZ_v11_20191118/eez_key.csv')
+
+#Selecting Australian subset
+aus_eez = mask.sel(Country_EEZ = eez_full_keys['MRGID'][eez_full_keys['SOVEREIGN1'] == 'Australia'].tolist()).EEZ_regions
 ```
 
 ## Plotting results
@@ -299,20 +333,20 @@ We will plot all regions below to ensure we got them all correctly.
 
 ``` python
 #We will loop through the first five to check results
-for reg in new_mask.EEZ_regions[0:5]:
+for reg in aus_eez:
   #Plotting results
   fig = plt.figure()
   ax = fig.add_subplot(111)
   reg.plot(ax = ax, levels = [1, 2])
-  plt.title(reg.Country.values.tolist())
+  plt.title(reg.Country_EEZ.values.tolist())
   plt.show()
 ```
 
-![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-8-3.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-8-4.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-8-5.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-8-6.png)<!-- -->
+![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-3.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-4.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-5.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-6.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-7.png)<!-- -->
 When comparing to the shapefile plots in the `R` section of this
 notebook, we can see that the regions are named correctly. This means
 that we can save our results now.
 
 ``` python
-new_mask.to_netcdf("../Data/Masks/EEZ-world-corrected_1degmask_DBPM.nc")
+mask.to_netcdf("../Data/Masks/EEZ-world-corrected_1degmask.nc")
 ```
