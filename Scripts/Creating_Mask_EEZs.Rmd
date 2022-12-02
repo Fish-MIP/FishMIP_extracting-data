@@ -43,7 +43,7 @@ eez_world <- read_sf("../Data/World_EEZ_v11_20191118/eez_v11.shp") %>%
 #We can check the results of the first two rows
 head(eez_world, 2)
 
-#Save key to identify EEZ and countries associated with them from extracted data files
+#Identify EEZ and countries associated with them from extracted data files
 eez_names_codes <- eez_world %>% 
   st_drop_geometry()
 ```
@@ -57,7 +57,6 @@ eez_world %>%
 #Saving keys
 eez_names_codes %>% 
   write_csv("../Data/World_EEZ_v11_20191118/eez_key.csv")
-
 ```
 
 ## Plotting FAO regions shapefile
@@ -96,9 +95,13 @@ We will now create multilayer mask, which match the resolution of the model forc
 #Loading 1 deg raster to be used as target for rasterising FAO regions
 deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
 #Sample from DBPM model
-#deg1 <- raster("../Data/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
+#deg1 <- raster("../Data/InputRasters/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
 #Sample from DBEM model
+<<<<<<< HEAD
 #deg05 <- raster("../Data/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
+=======
+#deg05 <- raster("../Data/InputRasters/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
+>>>>>>> f995c3a2c8b5820229f2df56edc87a326ce6fe91
 
 #Plotting raster
 plot(deg1)
@@ -159,8 +162,9 @@ We will now start `Python` and save the correct names for the FAO regions in the
 
 ```{r}
 #Activating conda
-use_condaenv(Sys.getenv("RETICULATE_PYTHON"))
+use_condaenv("CMIP6_data")
 ```
+
 ## Loading libraries
 
 ```{python}
@@ -169,6 +173,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 ```
+
 ## Loading raster using `xarray`
 ```{python}
 #Loading multilayer raster as dataset
@@ -221,5 +226,4 @@ When comparing to the shapefile plots in the `R` section of this notebook, we ca
 ```{python, eval = F}
 mask.to_netcdf("../Data/Masks/EEZ-world-corrected_1degmask.nc")
 ```
-
 
