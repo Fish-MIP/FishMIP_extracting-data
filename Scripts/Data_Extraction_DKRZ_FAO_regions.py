@@ -81,7 +81,7 @@ def load_ds_noncf(fn, start, end):
 #Defining function to calculate weighted means and anomalies in relation to values in the 90s
 def weighted_means(ds, weight, mask, file_out, **kwargs):
     '''
-    This function calculated weighted means per year and yearly anomalies in relation to values 
+    This function calculates weighted means per year and yearly anomalies in relation to values 
     in the decade between 1990 and 1999. It takes the following inputs:
     ds - ('data array') refers to data array containing data upon which means will be calculated
     weight - ('data array') contains weights to be used in weighted mean calculation
@@ -105,7 +105,7 @@ def weighted_means(ds, weight, mask, file_out, **kwargs):
         #Save results in list
         yr_mean_sec = (ds*weights).groupby('time.year').sum(('lon', 'lat', 'time'))
         if 'ref_ds' in kwargs.keys():
-            ref = ref_ds.sel(Country = eez.Country.values)
+            ref = ref_ds.sel(Country_EEZ = eez.Country_EEZ.values)
         else:
             ref = yr_mean_sec.sel(year = slice('1990', '1999')).mean('year')
         yr_change = ((yr_mean_sec-ref)/ref)*100
@@ -113,10 +113,10 @@ def weighted_means(ds, weight, mask, file_out, **kwargs):
         yr_anom.append(yr_change)
         if 'ref_ds' not in kwargs.keys():
             ref_ds.append(ref)
-    yr_means = xr.concat(yr_means, dim = 'Country').to_dataset('Country').to_dataframe()
-    yr_anom = xr.concat(yr_anom, dim = 'Country').to_dataset('Country').to_dataframe()
+    yr_means = xr.concat(yr_means, dim = 'Country_EEZ').to_dataset('Country_EEZ').to_dataframe()
+    yr_anom = xr.concat(yr_anom, dim = 'Country_EEZ').to_dataset('Country_EEZ').to_dataframe()
     if 'ref_ds' not in kwargs.keys():
-        ref_ds = xr.concat(ref_ds, dim = 'Country')
+        ref_ds = xr.concat(ref_ds, dim = 'Country_EEZ')
     #Save results
     yr_min = str(yr_change.year.values.min())
     yr_max = str(yr_change.year.values.max())
@@ -128,6 +128,33 @@ def weighted_means(ds, weight, mask, file_out, **kwargs):
         return yr_means, yr_anom
     else:
         return yr_means, yr_anom, ref_ds
+
+#Defining function to calculate range of values per EEZ area
+def range_ds(ds, mask, file_out):
+    '''
+    This function calculates minimum and maximum values per year per EEZ area. It takes the following inputs:
+    ds - ('data array') refers to data array containing data upon which means will be calculated
+    mask - ('data array') contains boundaries within which weighted means will be calculated
+    file_out - ('string') contains the file path and base file name to be used to save results
+    '''
+    min_vals = []
+    max_vals = []
+    for eez in mask:
+        #Save results in list
+        yr_min_sec = (ds*eez).groupby('time.year').min(('lon', 'lat', 'time'))
+        yr_max_sec = (ds*eez).groupby('time.year').max(('lon', 'lat', 'time'))
+        min_vals.append(yr_min_sec)
+        max_vals.append(yr_max_sec)
+    min_vals = xr.concat(min_vals, dim = 'Country_EEZ').to_dataset('Country_EEZ').to_dataframe()
+    max_vals = xr.concat(max_vals, dim = 'Country_EEZ').to_dataset('Country_EEZ').to_dataframe()
+    #Save results
+    yr_min = str(yr_min_sec.year.values.min())
+    yr_max = str(yr_min_sec.year.values.max())
+    path_out_min = f'{file_out}global_min_{yr_min}_{yr_max}.csv'
+    path_out_max = f'{file_out}global_max_{yr_min}_{yr_max}.csv'
+    min_vals.to_csv(path_out_min, na_rep = np.nan)
+    max_vals.to_csv(path_out_max, na_rep = np.nan)
+    return min_vals, max_vals
 
 #Getting list of historical and future projection experiments
 file_hist = [f for f in file_list if "historical" in f]
@@ -195,3 +222,7 @@ for f in file_hist:
         ds_yr_mean, ds_anom_per, ref_ds = weighted_means(ds[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out, base_file))
         ds_yr_mean_126, ds_anom_per_126 = weighted_means(ds_126[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_126), ref_ds = ref_ds)
         ds_yr_mean_585, ds_anom_per_585 = weighted_means(ds_585[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_585), ref_ds = ref_ds)
+        #Calculating range per EEZ and saving to disk
+        ds_yr_min, ds_yr_max = range_ds(ds[var_int], eez_mask.EEZ_regions, os.path.join(path_out, base_file))
+        ds_yr_min_126, ds_yr_max_126 = range_ds(ds_126[var_int], eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_126))
+        ds_yr_min_585, ds_yr_max_585 = range_ds(ds_585[var_int], eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_585))
