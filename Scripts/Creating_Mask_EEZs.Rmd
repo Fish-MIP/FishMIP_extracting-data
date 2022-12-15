@@ -250,3 +250,34 @@ fn = f'EEZ-world-corrected_{r.res}mask{r.mod_name}.nc'
 mask.to_netcdf(os.path.join('../Spatial_Data/Masks', fn))
 ```
 
+## Creating a 2D mask in `csv` format
+Depending on the format of your data, it may be better to have a 2D mask in `csv` format. We can create one using the raster we created in the previous step. We will switch to `R` to complete this step.
+
+```{r}
+#First we load our raster mask
+filename <- paste0("EEZ-world-corrected_", res, "mask", mod_name, ".nc")
+# We will load it as a stack
+ras <- stack(file.path("../Spatial_Data/Masks", filename), 
+             #This is the same variable name we used to create our original raster
+             varname = "EEZ_regions")
+
+#We will now convert our stack into points
+ras_df <- rasterToPoints(ras) %>% 
+  #Transforming form matrix to data frame
+  as.data.frame() %>% 
+  #Changing dimensions of data frame, so that our column names appear in the `ID_merged column`
+  pivot_longer(cols = -c(x, y), names_to = "ID_merged") %>% 
+  #We remove any rows containing only NA values
+  drop_na(value) %>% 
+  #We rename latitude and longitude column
+  rename("Lon" = "x", "Lat" = "y") %>% 
+  #We remove the `X` from the areas IDs
+  mutate(ID_merged = as.integer(str_remove(ID_merged, 'X'))) %>% 
+  #Remove the `value` column as it is now redundant
+  select(-value)
+
+#We can update our filename variable 
+filename <- paste0("EEZ-world_", res, "mask", mod_name, ".csv")
+#Saving the end file in your local machine
+write_csv(ras_df, file = file.path("../Spatial_Data/Masks", filename))
+```
