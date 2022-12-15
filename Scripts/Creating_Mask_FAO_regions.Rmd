@@ -191,6 +191,9 @@ Here we can see that the FAO region names are not saved correctly. They are numb
 #We can simply load the data frame from the R environment.
 FAO_keys = r.fao_names_codes
 
+#Ensuring ID column is read as integer
+FAO_keys['F_CODE'] = FAO_keys['F_CODE'].astype('int')
+
 #We could also load it from our disk using the line below.
 #FAO_keys = pd.read_csv("../Spatial_Data/FAO_shapefiles/FAO-regions_keys.csv")
 
@@ -201,7 +204,7 @@ We can now update the names on the `netcdf` file.
 
 ```{python}
 #We will use the values in the data frame we loaded above
-mask['FAO_reg_name'] = FAO_keys.NAME_EN.tolist()
+mask['FAO_reg_name'] = FAO_keys.F_CODE.tolist()
 
 #Checking results
 mask = mask.rename({'latitude': 'lat', 'longitude': 'lon'})
