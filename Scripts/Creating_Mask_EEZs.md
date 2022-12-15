@@ -19,14 +19,12 @@ Denisse Fierro Arcos
   a multilayer raster mask based on merged shapefile</a>
   - <a href="#loading-input-rasters" id="toc-loading-input-rasters">Loading
     input rasters</a>
-  - <a href="#calculate-grid-area" id="toc-calculate-grid-area">Calculate
-    grid area</a>
   - <a href="#defining-function-to-create-rasters-from-shapefiles"
     id="toc-defining-function-to-create-rasters-from-shapefiles">Defining
     function to create rasters from shapefiles</a>
-  - <a href="#applying-function-to-list-containing-all-shapefiles"
-    id="toc-applying-function-to-list-containing-all-shapefiles">Applying
-    function to list containing all shapefiles</a>
+  - <a href="#applying-raster-creation-function"
+    id="toc-applying-raster-creation-function">Applying raster creation
+    function</a>
 - <a href="#python-based-code"
   id="toc-python-based-code"><code>Python</code>-based code</a>
   - <a href="#loading-libraries" id="toc-loading-libraries">Loading
@@ -52,6 +50,8 @@ library(tidyverse)
 library(reticulate)
 ```
 
+    ## Warning: package 'reticulate' was built under R version 4.2.2
+
 ## Loading shapefiles
 
 The original shapefile contained a couple of errors: 1. The country of
@@ -66,7 +66,7 @@ interest and corrects the errors identified above.
 
 ``` r
 #Load shapefile with EEZ
-eez_world <- read_sf("../Data/World_EEZ_v11_20191118/eez_v11.shp") %>%
+eez_world <- read_sf("../Spatial_Data/World_EEZ_v11_20191118/eez_v11.shp") %>%
    #Subset of columns
   select(MRGID, GEONAME, POL_TYPE, SOVEREIGN1, SOVEREIGN2, SOVEREIGN3, AREA_KM2) %>% 
   #Turning character columns into factors
@@ -90,7 +90,7 @@ head(eez_world, 2)
     ## #   names ¹​POL_TYPE, ²​SOVEREIGN1, ³​SOVEREIGN2, ⁴​SOVEREIGN3, ⁵​AREA_KM2
 
 ``` r
-#Save key to identify EEZ and countries associated with them from extracted data files
+#Identify EEZ and countries associated with them from extracted data files
 eez_names_codes <- eez_world %>% 
   st_drop_geometry()
 ```
@@ -100,11 +100,11 @@ Saving the shapefile and keys for reference.
 ``` r
 #Saving the corrected shapefile
 eez_world %>% 
-  st_write("../Data/World_EEZ_v11_20191118/eez_short.shp", delete_layer = T)
+  st_write("../Spatial_Data/World_EEZ_v11_20191118/eez_short.shp", delete_layer = T)
 
 #Saving keys
 eez_names_codes %>% 
-  write_csv("../Data/World_EEZ_v11_20191118/eez_key.csv")
+  write_csv("../Spatial_Data/World_EEZ_v11_20191118/eez_key.csv")
 ```
 
 ## Plotting FAO regions shapefile
@@ -147,47 +147,59 @@ head(eez_names_codes, 2)
 
 ## Creating a multilayer raster mask based on merged shapefile
 
-We will now create multilayer mask, which match the resolution of the
-model forcings (1 deg). First, we will load the sample rasters.
+We will now create a multilayer mask that matches the grid used in the
+physical model forcings. Most models use the same 1 degree grid, with
+the exception of the DBPM ecosystem model, which uses a different 1
+degree grid, and the DBEM model, which uses a 0.5 degree grid.
+
+Note that masks *must* match the grid of the model from which data is
+being extracted. This means that you will need to create a new mask for
+each grid that is different. In the chunk below, you will find the three
+different grids identified in the ecosystem models.
 
 ### Loading input rasters
 
 ``` r
-#Loading 1 deg raster to be used as target for rasterising FAO regions
-deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+#Loading sample raster to be used as target for rasterising FAO regions
+#Most ecosystem models use this one degree grid
+ras <- raster("../Spatial_Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
 ```
 
     ## Loading required namespace: ncdf4
 
 ``` r
 #Sample from DBPM model
-#deg1 <- raster("../Data/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
+# ras <- raster("../Spatial_Data/InputRasters/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
+
 #Sample from DBEM model
-#deg05 <- raster("../Data/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
+# ras <- raster("../Spatial_Data/InputRasters/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
+
+#We will define a few extra variables to automate creation of file names for each mask
+#Model resolution
+res <- "1deg"
+
+#Model associated with grid. Leave blank if multiple models use same grid
+mod_name <- ""
 
 #Plotting raster
-plot(deg1)
+plot(ras)
 ```
 
 ![](Creating_Mask_EEZs_files/figure-gfm/load_rasters_input-1.png)<!-- -->
-
-``` r
-#plot(deg05)
-```
-
-### Calculate grid area
-
-The `raster` package allows us to calculate the area of grid cells in
-$km^2$ in just one line of code. We can save this to calculate weighted
-means by area. We will use the raster above as a base, and we will save
-the result on our disk.
+\### Calculate grid area The `raster` package allows us to calculate the
+area of grid cells in $km^2$ in just one line of code. We can save this
+to calculate weighted means by area. We will use the raster above as a
+base, and we will save the result on our disk.
 
 ``` r
 #Calculating grid area
-deg_area <- area(deg1)
+area_grid <- area(ras)
+
+#Creating file name 
+filename <- paste0("area_", res, mod_name, ".nc")
 
 #Saving results
-writeRaster(deg_area, "../Data/InputRasters/area_1deg.nc", format = "CDF", overwrite = T, 
+writeRaster(area_grid, file.path("../Spatial_Data/Masks", filename), format = "CDF", overwrite = T, 
             #We will save the variable names so they match the Fish-MIP models
             varname = "area", xname = "lon", yname = "lat", varunit = "km2")
 ```
@@ -205,7 +217,11 @@ shp_to_raster <- function(shp, nc_raster){
 }
 ```
 
-### Applying function to list containing all shapefiles
+### Applying raster creation function
+
+We will apply the function we defined above to all the polygons
+contained within our shapefile. We can do this easily using the `map`
+function from the `purrr` package.
 
 ``` r
 #Split shapefile into regions prior to transforming into raster
@@ -214,19 +230,24 @@ eez_list <- eez_world %>%
   group_split()
 
 #Applying function to raster list
-deg1_raster <- map(eez_list, shp_to_raster, deg1) %>% 
+grid_raster <- map(eez_list, shp_to_raster, ras) %>% 
   #Stacking rasters to create a single multilayer raster
   stack()
 
 #Checking results of stacked raster (selected Australian EEZs)...
-plot(deg1_raster[[c(31:34, 45, 103)]])
+plot(grid_raster[[c(31:34, 45, 103)]])
 ```
 
 ![](Creating_Mask_EEZs_files/figure-gfm/mapping_function-1.png)<!-- -->
 
+Finally, we save the outputs in our local machine.
+
 ``` r
+#Define file name
+filename <- paste0("EEZ-world_", res, "mask", mod_name, ".nc")
+
 #Saving raster to disk
-writeRaster(deg1_raster, "../Data/Masks/EEZ-world_1degmask.nc", format = "CDF", overwrite = T,
+writeRaster(grid_raster, file.path("../Spatial_Data/Masks", filename), format = "CDF", overwrite = T,
             varname = "EEZ_regions", zname = "Country_EEZ")
 ```
 
@@ -237,32 +258,27 @@ regions in the `netcdf` file we created in `R`.
 
 ``` r
 #Activating conda
-use_condaenv(Sys.getenv("RETICULATE_PYTHON"))
+use_condaenv("CMIP6_data")
 ```
-
-    ## Warning in use_condaenv(Sys.getenv("RETICULATE_PYTHON")): path supplied to use_condaenv() is not a conda python:
-    ##  C:/Users/ldfierro/OneDrive - University of Tasmania/FishMIP/FishMIP_extracting-data/FishMIP_env_Python/python.exe
 
 ## Loading libraries
 
 ``` python
 import xarray as xr
-```
-
-    ## C:\Users\ldfierro\AppData\Roaming\Python\Python38\site-packages\scipy\__init__.py:138: UserWarning: A NumPy version >=1.16.5 and <1.23.0 is required for this version of SciPy (detected version 1.23.2)
-    ##   warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion} is required for this version of "
-
-``` python
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import os
 ```
 
 ## Loading raster using `xarray`
 
 ``` python
+#Getting filename
+fn = f'EEZ-world_{r.res}mask{r.mod_name}.nc'
+
 #Loading multilayer raster as dataset
-mask = xr.open_dataset("../Data/Masks/EEZ-world_1degmask.nc")
+mask = xr.open_dataset(os.path.join('../Spatial_Data/Masks', fn))
 #Checking saved file in R
 mask
 ```
@@ -279,7 +295,7 @@ mask
     ## Attributes:
     ##     Conventions:  CF-1.4
     ##     created_by:   R, packages ncdf4 and raster (version 3.5-29)
-    ##     date:         2022-12-02 13:13:36
+    ##     date:         2022-12-15 18:10:52
 
 Here we can see that the FAO region names are not saved correctly. They
 are numbered based on its location on the shapefile. We can update this
@@ -320,8 +336,9 @@ We will load the full keys into memory and we will select all EEZ areas
 for Australia to ensure masks are correct.
 
 ``` python
+#Create filename 
 #Loading keys
-eez_full_keys = pd.read_csv('../Data/World_EEZ_v11_20191118/eez_key.csv')
+eez_full_keys = pd.read_csv('../Spatial_Data/World_EEZ_v11_20191118/eez_key.csv')
 
 #Selecting Australian subset
 aus_eez = mask.sel(Country_EEZ = eez_full_keys['MRGID'][eez_full_keys['SOVEREIGN1'] == 'Australia'].tolist()).EEZ_regions
@@ -343,10 +360,14 @@ for reg in aus_eez:
 ```
 
 ![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-3.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-4.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-5.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-6.png)<!-- -->![](Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-7.png)<!-- -->
+
 When comparing to the shapefile plots in the `R` section of this
 notebook, we can see that the regions are named correctly. This means
 that we can save our results now.
 
 ``` python
-mask.to_netcdf("../Data/Masks/EEZ-world-corrected_1degmask.nc")
+#Creating filename
+fn = f'EEZ-world-corrected_{r.res}mask{r.mod_name}.nc'
+
+mask.to_netcdf(os.path.join('../Spatial_Data/Masks', fn))
 ```
