@@ -31,7 +31,7 @@ A copy of the FAO Major Fishing Areas was saved locally from the [FAO's WFS serv
 
 ```{r shapefiles_dirs}
 #Load shapefile with FAO regions
-fao_reg <- read_sf("../Data/FAO_shapefiles/FAO_MajorAreas.shp") %>% 
+fao_reg <- read_sf("../Spatial_Data/FAO_shapefiles/FAO_MajorAreas.shp") %>% 
   #Subset of columns
   select(-c(F_LEVEL, F_STATUS, SUBOCEAN:F_SUBUNIT, NAME_FR:SURFACE)) %>% 
   #Turning character columns into factors
@@ -73,19 +73,40 @@ fao_names_codes <- fao_reg %>%
 
 #We can check some of the results
 head(fao_names_codes, 2)
+
+#Saving FAO region keys
+fao_names_codes %>% 
+  write_csv("../Spatial_Data/FAO_shapefiles/FAO-regions_keys.csv")
 ```
 
 
 ## Creating a multilayer raster mask based on merged shapefile
-We will now create multilayer mask, which match the resolution of the model forcings (1 deg). First, we will load the sample rasters.
+We will now create a multilayer mask that matches the grid used in the physical model forcings. Most models use the same 1 degree grid, with the exception of the DBPM ecosystem model, which uses a different 1 degree grid, and the DBEM model, which uses a 0.5 degree grid.  
+  
+Note that masks *must* match the grid of the model from which data is being extracted. This means that you will need to create a new mask for each grid that is different. In the chunk below, you will find the three different grids identified in the ecosystem models.
 
 ### Loading input rasters
+
 ```{r load_rasters_input}
-#Loading 1 deg raster to be used as target for rasterising FAO regions
-deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+#Loading sample raster to be used as target for rasterising FAO regions
+#Most ecosystem models use this one degree grid
+# ras <- raster("../Spatial_Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+
+#Sample from DBPM model
+ras <- raster("../Spatial_Data/InputRasters/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
+
+#Sample from DBEM model
+# ras <- raster("../Spatial_Data/InputRasters/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
+
+#We will define a few extra variables to automate creation of file names for each mask
+#Model resolution
+res <- "1deg"
+
+#Model associated with grid. Leave blank if multiple models use same grid
+mod_name <- "_DBPM"
 
 #Plotting raster
-plot(deg_area)
+plot(ras)
 ```
 
 ### Defining function to create rasters from shapefiles
@@ -109,12 +130,12 @@ fao_reg_list <- fao_reg %>%
   group_split()
 
 #Applying function to raster list
-deg1_raster <- map(fao_reg_list, shp_to_raster, deg1) %>% 
+grid_raster <- map(fao_reg_list, shp_to_raster, ras) %>% 
   #Stacking rasters to create a single multilayer raster
   stack()
 
 #Checking results of stacked raster (first six regions)...
-plot(deg1_raster[[1:6]])
+plot(grid_raster[[1:6]])
 ```
 We will plot the shapefile to compare results.
 
@@ -129,14 +150,13 @@ fao_reg %>%
 ```
 The results match! We can now save the results locally and move onto `Python` for the final touches.
 
-```{r}
-#Saving raster to disk
-writeRaster(deg1_raster, "../Data/Masks/FAO-regions_1degmask.nc", format = "CDF", overwrite = T,
-            varname = "FAO_regions", zname = "FAO_reg_name")
+```{r eval = F}
+#Define file name
+filename <- paste0("FAO-regions_", res, "mask", mod_name, ".nc")
 
-#Saving FAO region keys
-fao_names_codes %>% 
-  write_csv("../Data/Masks/FAO-regions_1degmask_keys.csv")
+#Saving raster to disk
+writeRaster(grid_raster, file.path("../Spatial_Data/Masks", filename), format = "CDF", overwrite = T,
+            varname = "FAO_regions", zname = "FAO_reg_name")
 ```
 
 # `Python`-based code
@@ -144,7 +164,7 @@ We will now start `Python` and save the correct names for the FAO regions in the
 
 ```{r}
 #Activating conda
-use_condaenv(Sys.getenv("RETICULATE_PYTHON"))
+use_condaenv("CMIP6_data")
 ```
 ## Loading libraries
 
@@ -153,11 +173,15 @@ import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import os
 ```
 ## Loading raster using `xarray`
 ```{python}
+#Getting filename
+fn = f'FAO-regions_{r.res}mask{r.mod_name}.nc'
+
 #Loading multilayer raster as dataset
-mask = xr.open_dataset("../Data/Masks/FAO-regions_1degmask.nc")
+mask = xr.open_dataset(os.path.join('../Spatial_Data/Masks', fn))
 #Checking saved file in R
 mask
 ```
@@ -166,8 +190,9 @@ Here we can see that the FAO region names are not saved correctly. They are numb
 ```{python}
 #We can simply load the data frame from the R environment.
 FAO_keys = r.fao_names_codes
+
 #We could also load it from our disk using the line below.
-#FAO_keys = pd.read_csv("../Data/Masks/FAO-regions_1degmask_keys.csv")
+#FAO_keys = pd.read_csv("../Spatial_Data/FAO_shapefiles/FAO-regions_keys.csv")
 
 #Checking list
 FAO_keys
@@ -181,6 +206,7 @@ mask['FAO_reg_name'] = FAO_keys.NAME_EN.tolist()
 #Checking results
 mask = mask.rename({'latitude': 'lat', 'longitude': 'lon'})
 ```
+
 ## Plotting results
 We will plot all regions below to ensure we got them all correctly.
 ```{python}
@@ -196,12 +222,12 @@ for reg in mask.FAO_regions:
 ```
 When comparing to the shapefile plots in the `R` section of this notebook, we can see that the regions are named correctly. This means that we can save our results now.
 
-```{python}
-mask.to_netcdf("../Data/Masks/FAO-regions_corrected_1degmask.nc")
+```{python eval =F}
+#Creating filename
+fn = f'FAO-regions-corrected_{r.res}mask{r.mod_name}.nc'
+
+#Saving result
+mask.to_netcdf(os.path.join('../Spatial_Data/Masks', fn))
 ```
-
-
-#Turn the nc file to csv for masking
-#Do the same for EEZs
 
 
