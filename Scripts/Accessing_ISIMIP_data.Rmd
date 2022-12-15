@@ -13,8 +13,7 @@ This notebook will accessing data from the [Inter-Sectoral Impact Model Intercom
 
 In this notebook, we will use `Python` to make use of some functions from the `isimip-client` library available in [GitHub](https://github.com/ISI-MIP/isimip-client). We will then move to `R` to examine and manipulate the data.
 
-## Setting up the notebook
-### Loading R libraries
+## Loading R libraries
 ```{r results = "hide", warnings = F, message = F}
 library(reticulate)
 library(tidyverse)
@@ -24,34 +23,21 @@ library(raster)
 library(sf)
 ```
 
-### Setting up Python for use in an R notebook
-Using the `reticulate` package. You have the option to set the path of Python installation using `reticulate::use_python("PATH_TO_PYTHON_INSTALLATION")`, or to point to a specific conda environment using `reticulate::use_condaenv("conda_env")`.
+## Setting up Python for use in an R notebook
+Using the `reticulate` package. You have the option to set the path of `Python` installation using `reticulate::use_python("PATH_TO_PYTHON_INSTALLATION")`. If you do not know the location of the `Python` in your machine, you can use the `Sys.which()` function in `R`. We can combine these two functions to call `Python` in this notebook like this: `use_python(as.character(Sys.which("python")))`.  
+  
+However, since a conda environment containing the specific `Python` libraries needed to run this and all notebooks in the repository is provided here, we will use this option instead. To point to a specific conda environment we use the function `reticulate::use_condaenv("name_conda_environment")`. For information on how to install the conda environment, refer to the [README](../README.md) file.
 
-#### Search Python installation path
-You can use the `Sys.which()` function in `R` to search the path of the Python installation in your machine using the command below. We will save the path to a variable so we can use it while setting up `Python` access in this notebook.
 ```{r}
-python_path <- as.character(Sys.which("python"))
+#Calling a specific conda environment
+use_condaenv("CMIP6_data")
 ```
 
-We can now use the above variable when calling `Python` to this notebook. But as explained above, you can also call a specific environment.
-```{r}
-#Point to location of Python installation in your machine
-use_python(python_path)
+# Python-based code
+## Loading ISIMIP Client script
+The ISIMIP-Client Python package is available online in their [repository](https://github.com/ISI-MIP/isimip-client). This library is available in our conda environment, but you can install it in your local machine using the following line: `!pip install git+https://github.com/ISI-MIP/isimip-client` inside a `Python` chunk or in the command line if you remove the `!` at the beginning.
 
-#Alternatively, point to a specific conda environment
-#use_condaenv("/opt/conda")
-```
-
-## Python-based code
-### Loading ISIMIP Client script
-The ISIMIP-Client Python package is available online in their [repository](https://github.com/ISI-MIP/isimip-client). We will now load the script containing these functions. You can install the library using the `Python` chunk below. Only activate the chunk below if you have not previously installed the library.
-
-```{python}
-#Install 
-#!pip install git+https://github.com/ISI-MIP/isimip-client
-```
-
-We will now load the `ISIMIP client` library and start a session so we can start search the repository and downloading data.
+We will now load the `ISIMIP client` library and start a session in our notebook so we can start quertying the ISIMIP repository and downloading the data we need.
 
 ```{python}
 #Loading the library
@@ -61,7 +47,7 @@ import isimip_client.client as cl
 client = cl.ISIMIPClient()
 ```
 
-### Search ISIMIP repository
+## Search ISIMIP repository
 You can create a query specifying several attributes of the dataset of your interest. In this case, we are interested in Total Catch (`tc` for short), which is a type of Output Data from the ISIMIP3b simulation. For this example, we have also specified an ecological model (`EcoOcean`), the climate forcing used (`GFDL-ESM4` model) and the climate scenario (`historical`).
 
 ```{python}
@@ -107,7 +93,7 @@ for datasets in query['results']:
 ```
 
 
-#### Optional step
+### Optional step
 If you are looking for a subset of the global dataset, you can set a bounding box and only extract data for your area of interest. In this case, we will extract information for the Southern Ocean only.
 
 ```{python}
@@ -115,7 +101,7 @@ If you are looking for a subset of the global dataset, you can set a bounding bo
 SO_data_URL = client.cutout(urls_sub, bbox = [-90, -40, -180, 180])
 ```
 
-### Downloading data to disk
+## Downloading data to disk
 We will download the data and store it into the `data` folder. First we will make sure a `data` folder exists and if it does not exist, we will create one.
 
 ```{python}
@@ -131,7 +117,7 @@ else:
 ```
 Use the `client.download()` function to save data to disk. 
 
-```{python}
+```{python eval = F}
 #To download the subsetted data
 client.download(url = SO_data_URL['file_url'], \
                 path = '../Data/', validate = False, \
@@ -140,18 +126,18 @@ client.download(url = SO_data_URL['file_url'], \
 ```
 
 To download global data we use the same function, but we need to point at the correct variable storing the URL to the global dataset.
-```{python}
-# client.download(url = urls[0], \
-#                 path = '../Data/', validate = False, \
-#                 extract = True)
+```{python eval = F}
+client.download(url = urls[0], \
+                path = '../Data/', validate = False, \
+                extract = True)
                 
 ```
 
 
-## R-based code
+# R-based code
 You are now ready to load the dataset into `R` to make any calculations and visualise results.
 
-### Inspecting contents of netcdf file
+## Inspecting contents of netcdf file
 For a quick overview of the content of the dataset we just downloaded, we can make use of the `metR` package.
 
 ```{r}
@@ -188,7 +174,7 @@ tc_raster[tc_raster >= NA_val] <- NA
 plot(tc_raster)
 ```
 
-### Loading dataset as dataframe for easy manipulation
+## Loading dataset as dataframe for easy manipulation
 This data type allows us to use the `tidyverse` to make calculations easily.  
   
 As seen from plotting the raster above, we must first mask `No Data Values` before we carry out any calculations.
@@ -201,7 +187,7 @@ tc_SO <- ReadNetCDF(data_file, vars = "tc") %>%
          T ~ tc))
 ```
 
-### Calculating climatology
+## Calculating climatology
 We will use all data between 1960 and 2020 to calculate the climatological mean of total catch for the Southern Ocean.
 
 ```{r}
@@ -213,7 +199,7 @@ clim_tc <- tc_SO %>%
   summarise(mean_tc = mean(tc, na.rm = F))
 ```
 
-### Plotting climatology
+## Plotting climatology
 
 ```{r}
 #Switching off spherical geometry prior to accessing and cropping world shapefile
@@ -246,7 +232,6 @@ clim_tc %>%
  
 
 ```
-
 
 
 

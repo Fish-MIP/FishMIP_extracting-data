@@ -97,11 +97,7 @@ deg1 <- raster("../Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_glo
 #Sample from DBPM model
 #deg1 <- raster("../Data/InputRasters/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
 #Sample from DBEM model
-<<<<<<< HEAD
-#deg05 <- raster("../Data/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
-=======
 #deg05 <- raster("../Data/InputRasters/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
->>>>>>> f995c3a2c8b5820229f2df56edc87a326ce6fe91
 
 #Plotting raster
 plot(deg1)
