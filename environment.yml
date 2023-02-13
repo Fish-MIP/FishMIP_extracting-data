@@ -295,6 +295,5 @@ dependencies:
   - zstd=1.5.2=h6239696_4
   - pip:
     - dill==0.3.6
-    - isimip-client==0.1.0
     - patchworklib==0.4.7
-prefix: /homevol/ldfierro/miniconda3/envs/CMIP6_data
+prefix: /perm_storage/home/lidefi87/miniconda3/envs/CMIP6_data
