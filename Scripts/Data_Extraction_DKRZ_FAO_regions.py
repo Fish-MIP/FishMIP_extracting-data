@@ -11,10 +11,11 @@ import re
 #######################################################################################
 #Variables between the hash lines can be edited
 #Variable of interest - as it appears in the models
-var_int = 'tcb'
+var_int = input('Write the name of the variable you want to process: ')
 #Keywords used to identified the files that will be processed
 #These keywords must be present in all files across all models
-file_key = '*nat_default_tcb_g*.nc'
+file_key = input('Write the common file pattern (e.g., *_default_tc_g*.nc): ')
+#file_key = '*_default_tc_g*.nc'
 
 #Base directory where outputs will be saved
 base_out = 'FAO_data_extractions'
@@ -22,15 +23,12 @@ base_out = 'FAO_data_extractions'
 #Base directory where data is currently stored
 base_dir = '/work/bb0820/ISIMIP/ISIMIP3b/OutputData/marine-fishery_global/'
 
-#Indicate location of EEZ masks and area rasters
-eez_mask_all = xr.open_dataset('Masks/EEZ-world-corrected_1degmask.nc')
-area_all = xr.open_dataset('Masks/area_1deg.nc').area
-#Masks for DBPM model
-eez_mask_DBPM = xr.open_dataset('Masks/EEZ-world-corrected_1degmask_DBPM.nc')
-area_DBPM = xr.open_dataset('Masks/area_1deg_DBPM.nc').area
-#Masks for DBEM model
-eez_mask_DBEM = xr.open_dataset('Masks/EEZ-world-corrected_05degmask.nc')
-area_DBEM = xr.open_dataset('Masks/area_05deg.nc').area
+#Indicate location of EEZ masks and area rasters and transform from km2 to m2
+area_all = xr.open_dataarray('Masks/area_1deg_mask_FAO-EEZ.nc')*1e6
+#Mask for DBPM model
+area_DBPM = xr.open_dataarray('Masks/area_1deg_DBPM_mask_FAO-EEZ.nc')*1e6
+#Mask for DBEM model
+area_DBEM = xr.open_dataarray('Masks/area_05deg_mask_FAO-EEZ.nc')*1e6
 #######################################################################################
 
 
@@ -129,6 +127,32 @@ def weighted_means(ds, weight, mask, file_out, **kwargs):
     else:
         return yr_means, yr_anom, ref_ds
 
+#Defining function to calculate sum of values per FAO and EEZ area per month
+def monthly_sum(ds, mask, file_out):
+    '''
+    This function calculates the sum of biomass per month per regions included in area data array.
+    It takes the following inputs:
+    ds - ('data array') refers to data array containing data upon which means will be calculated
+    mask - ('data array') contains area per pixel and boundaries within which weighted means will 
+    be calculated
+    file_out - ('string') contains the file path and base file name to be used to save results
+    '''
+    #Creating empty array to store results
+    month_sum = []
+    #Multiplying dataset by area in m2
+    ds_area = ds*mask
+    #Calculating sums per year, per month and per region
+    for yr, da in ds_area.groupby('time.year'):
+        for mth, da_m in da.groupby('time.month'):
+            month_sum.append(da_m.groupby('mask_FAO_EEZ').sum())
+    #Create data array with results and transforming to tonnes
+    month_sum = xr.concat(month_sum, dim = 'time')*1e-6
+    #Saving results
+    yr_min = str(ds.time.dt.year.values.min())
+    yr_max = str(ds.time.dt.year.values.max())
+    path_out = f'{file_out}global_tonnes_{yr_min}_{yr_max}.csv'
+    month_sum.to_pandas().to_csv(path_out, na_rep = np.nan)
+
 #Defining function to calculate range of values per EEZ area
 def range_ds(ds, mask, file_out):
     '''
@@ -210,19 +234,15 @@ for f in file_hist:
             ds_585 = ds_585.where(ds_585 < 1e20)
         #Load the correct grid area and mask rasters that match the model
         if (exp.lower() == "dbpm") or ('ipsl' in esm.lower() and exp.lower() == 'zoomss'):
-            eez_mask = eez_mask_DBPM
             area = area_DBPM
         elif exp.lower() == "dbem":
-            eez_mask = eez_mask_DBEM
             area = area_DBEM
         else:
-            eez_mask = eez_mask_all
             area = area_all
-        #Calculating mean weighted yearly values per EEZ and saving to disk
-        ds_yr_mean, ds_anom_per, ref_ds = weighted_means(ds[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out, base_file))
-        ds_yr_mean_126, ds_anom_per_126 = weighted_means(ds_126[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_126), ref_ds = ref_ds)
-        ds_yr_mean_585, ds_anom_per_585 = weighted_means(ds_585[var_int], area, eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_585), ref_ds = ref_ds)
-        #Calculating range per EEZ and saving to disk
-        ds_yr_min, ds_yr_max = range_ds(ds[var_int], eez_mask.EEZ_regions, os.path.join(path_out, base_file))
-        ds_yr_min_126, ds_yr_max_126 = range_ds(ds_126[var_int], eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_126))
-        ds_yr_min_585, ds_yr_max_585 = range_ds(ds_585[var_int], eez_mask.EEZ_regions, os.path.join(path_out_future, base_file_585))
+        #Calculating monthly sums per EEZ and FAO regions and saving to disk
+        #Historical
+        monthly_sum(ds[var_int], area, os.path.join(path_out, base_file))
+        #SSP126
+        monthly_sum(ds_126[var_int], area, os.path.join(path_out_future, base_file_126))
+        #SSP585
+        monthly_sum(ds_585[var_int], area, os.path.join(path_out_future, base_file_585))
