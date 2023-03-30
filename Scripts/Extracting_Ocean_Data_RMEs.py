@@ -8,6 +8,9 @@
 #this script. This is done in the command line as follows:
 #module load python3
 #python3 Extracting_Ocean_Data_RMEs.py
+#Note that the regional boundaries used here were created using
+#the "Creating_Your_Own_Mask_From_Shapefiles" script available
+#in this repository.
 
 ### Loading libraries
 import xarray as xr
