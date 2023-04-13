@@ -97,13 +97,16 @@ Note that masks *must* match the grid of the model from which data is being extr
 ```{r load_rasters_input}
 #Loading sample raster to be used as target for rasterising FAO regions
 #Most ecosystem models use this one degree grid
-ras <- raster("../Spatial_Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_onedeg_global_fixed.nc")
+ras <- raster("../Spatial_Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_1deg_global_fixed.nc")
 
 #Sample from DBPM model
-# ras <- raster("../Spatial_Data/InputRasters/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_monthly_1850_2014.nc")[[1]]
+# ras <- raster("../Spatial_Data/InputRasters/dbpm_ipsl-cm6a-lr_nobasd_historical_nat_default_1deg_tcb_global_monthly_1850_2014.nc")[[1]]
 
 #Sample from DBEM model
-# ras <- raster("../Spatial_Data/InputRasters/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_tcb_global_annual_1951_2014.nc")[[1]]
+# ras <- raster("../Spatial_Data/InputRasters/dbem_ipsl-cm6a-lr_nobasd_historical_nat_default_05deg_tcb_global_annual_1951_2014.nc")[[1]]
+
+#Sample for 0.25 degree grid
+# ras <- raster("../Spatial_Data/InputRasters/gfdl-mom6-cobalt2_obsclim_deptho_025deg_global_fixed.nc")
 
 #We will define a few extra variables to automate creation of file names for each mask
 #Model resolution
