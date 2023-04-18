@@ -1,0 +1,31 @@
+name: CMIP6_data
+channels:
+  - defaults
+dependencies:
+  - xmip
+  - matplotlib
+  - cmocean
+  - numpy
+  - intake
+  - xarray
+  - dask
+  - cartopy
+  - netcdf4
+  - bottleneck
+  - cf_xarray
+  - google-auth
+  - google-auth-oauthlib
+  - google-cloud-core
+  - google-cloud-storage
+  - google-api-core
+  - intake-esm
+  - gcsfs
+  - zarr
+  - ipython
+  - jupyter_client
+  - ipykernel
+  - jupyter_core
+  - geopandas
+  - regionmask
+  - pygeos
+prefix: C:\Users\ldfierro\AppData\Local\miniconda3\envs\CMIP6_data
