@@ -97,7 +97,7 @@ fao_reg %>%
   theme_bw()
 ```
 
-![](Creating_Mask_FAO_regions_files/figure-gfm/plot_shapefile-1.png)<!-- -->
+![](figures/Creating_Mask_FAO_regions_files/figure-gfm/plot_shapefile-1.png)<!-- -->
 
 ## Extracting names and codes for FAO regions
 
@@ -175,7 +175,7 @@ mod_name <- "_DBPM"
 plot(ras)
 ```
 
-![](Creating_Mask_FAO_regions_files/figure-gfm/load_rasters_input-1.png)<!-- -->
+![](figures/Creating_Mask_FAO_regions_files/figure-gfm/load_rasters_input-1.png)<!-- -->
 
 ### Defining function to create rasters from shapefiles
 
@@ -207,7 +207,7 @@ grid_raster <- map(fao_reg_list, shp_to_raster, ras) %>%
 plot(grid_raster[[1:6]])
 ```
 
-![](Creating_Mask_FAO_regions_files/figure-gfm/mapping_function-1.png)<!-- -->
+![](figures/Creating_Mask_FAO_regions_files/figure-gfm/mapping_function-1.png)<!-- -->
 We will plot the shapefile to compare results.
 
 ``` r
@@ -220,7 +220,7 @@ fao_reg %>%
   facet_wrap(~F_CODE)
 ```
 
-![](Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+![](figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
 The results match! We can now save the results locally and move onto
 `Python` for the final touches.
 
@@ -713,7 +713,7 @@ for reg in mask.FAO_regions:
   plt.show()
 ```
 
-<img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-1.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-2.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-3.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-4.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-5.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-6.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-7.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-8.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-9.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-10.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-11.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-12.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-13.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-14.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-15.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-16.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-17.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-18.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-19.png" width="672" /><img src="Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-20.png" width="672" />
+<img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-1.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-2.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-3.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-4.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-5.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-6.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-7.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-8.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-9.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-10.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-11.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-12.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-13.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-14.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-15.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-16.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-17.png" width="672" /><img src="figures/"Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-18.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-19.png" width="672" /><img src="figures/Creating_Mask_FAO_regions_files/figure-gfm/unnamed-chunk-8-20.png" width="672" />
 When comparing to the shapefile plots in the `R` section of this
 notebook, we can see that the regions are named correctly. This means
 that we can save our results now.

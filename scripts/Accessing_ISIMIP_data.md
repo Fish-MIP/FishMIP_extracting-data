@@ -257,7 +257,7 @@ NA_val <- tc_raster@file@nodatavalue
 plot(tc_raster)
 ```
 
-![](Accessing_ISIMIP_data_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+![](figures/Accessing_ISIMIP_data_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 We can see that a `No Data Values` is included in the dataset to mark
 areas where no values have been collected because all land areas have
 the same value.
@@ -272,7 +272,7 @@ tc_raster[tc_raster >= NA_val] <- NA
 plot(tc_raster)
 ```
 
-![](Accessing_ISIMIP_data_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](figures/Accessing_ISIMIP_data_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ## Loading dataset as dataframe for easy manipulation
 
@@ -354,4 +354,4 @@ clim_tc %>%
         legend.position = "bottom")
 ```
 
-![](Accessing_ISIMIP_data_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](figures/Accessing_ISIMIP_data_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->

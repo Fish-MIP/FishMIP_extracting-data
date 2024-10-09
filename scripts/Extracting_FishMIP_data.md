@@ -1,0 +1,197 @@
+Extracting FishMIP Data
+================
+Denisse Fierro Arcos
+2022-09-19
+
+-   [Introduction](#introduction)
+-   [Loading R libraries](#loading-r-libraries)
+-   [Defining relevant directories](#defining-relevant-directories)
+    -   [Obtaining list of files needed to create
+        summaries](#obtaining-list-of-files-needed-to-create-summaries)
+-   [Loading LME mask to extract
+    data](#loading-lme-mask-to-extract-data)
+-   [Defining function to merge files and extract
+    data](#defining-function-to-merge-files-and-extract-data)
+-   [Parallelising work](#parallelising-work)
+    -   [Applying `join_effort_data`
+        function](#applying-join_effort_data-function)
+-   [Creating a single file for all aggregated
+    effort](#creating-a-single-file-for-all-aggregated-effort)
+
+## Introduction
+
+This notebook will guide you through the steps of how to extract data
+using the `csv` masks created using the
+[`Creating_Your_Own_Mask_From_Shapefiles`](%22Creating_Your_Own_Mask_From_Shapefiles.md%22).
+
+## Loading R libraries
+
+``` r
+library(tidyverse)
+library(parallel)
+library(data.table)
+library(dtplyr)
+```
+
+## Defining relevant directories
+
+``` r
+yannick_dir <- "/rd/gem/private/users/yannickr"
+original_effort_dir <- "/rd/gem/private/users/yannickr/effort_mapped_bycountry"
+aggregated_files_dir <- "/rd/gem/private/users/ldfierro/effort_mapped_by_country_aggregated/"
+```
+
+### Obtaining list of files needed to create summaries
+
+``` r
+#Files located under the original effort directory
+original_effort_files <- list.files(original_effort_dir, pattern = ".csv")
+
+#Checking we got the correct files
+head(original_effort_files)
+```
+
+    ## [1] "mapped_1950_APW_100.csv" "mapped_1950_APW_104.csv"
+    ## [3] "mapped_1950_APW_12.csv"  "mapped_1950_APW_120.csv"
+    ## [5] "mapped_1950_APW_124.csv" "mapped_1950_APW_132.csv"
+
+## Loading LME mask to extract data
+
+For this example, we will be using the 0.5 degree mask for LMEs, which
+matches the resolution of the outputs that we will be used for these
+data extractions.
+
+``` r
+mask_df <- read_csv("../Data/Masks/fishMIP_regional_05deg_ISIMIP3a.csv") %>% 
+  lazy_dt()
+```
+
+    ## Rows: 16452 Columns: 3── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (1): region
+    ## dbl (2): Lon, Lat
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+#Check contents of mask
+head(mask_df)
+```
+
+    ## Source: local data table [6 x 3]
+    ## Call:   head(`_DT1`, n = 6L)
+    ## 
+    ##     Lon   Lat region    
+    ##   <dbl> <dbl> <chr>     
+    ## 1  21.2  64.2 Baltic.Sea
+    ## 2  21.8  64.2 Baltic.Sea
+    ## 3  22.2  64.2 Baltic.Sea
+    ## 4  22.8  64.2 Baltic.Sea
+    ## 5  23.2  64.2 Baltic.Sea
+    ## 6  20.8  63.8 Baltic.Sea
+    ## 
+    ## # Use as.data.table()/as.data.frame()/as_tibble() to access results
+
+## Defining function to merge files and extract data
+
+Given that we have 29852 files to process, we will create a function
+before looping over all files.
+
+This function has three inputs:  
+- `file_name`: a character vector, which refers to the file that will be
+used for data extraction, - `mask`: which refers to data frame or tibble
+containing coordinates (lon and lat) for all LMEs - `prefix_name`: a
+prefix in the format of a string that will be added to the name of files
+containing extractions
+
+``` r
+join_effort_data <- function(file_name, mask, prefix_name){
+  #Check if directory with same name as prefix exists, if not, create a new folder
+  if(!dir.exists(file.path(aggregated_files_dir, prefix_name))){
+    dir.create(file.path(aggregated_files_dir, prefix_name))
+  }
+  
+  #Creating vector with full paths for original data
+  this_source_path <- file.path(original_effort_dir, file_name)
+  
+  #Creating vector with full path to save data
+  this_destination_path <- file.path(aggregated_files_dir, prefix_name, 
+                                     paste0(prefix_name, "_aggregated_", file_name))
+  #Extracting year from file name
+  if(!file.exists(this_destination_path)){
+    Year <- as.numeric(str_extract(file_name, pattern =  "([[:digit:]])+"))
+    #Load original dataset
+    these_data <- read_csv(this_source_path) %>% 
+      lazy_dt()
+    
+    #Join data from original effort files and masks using coordinates
+    these_aggregated_data <-  these_data %>%
+      left_join(mask, by = c("Lat", "Lon")) %>%
+      #Group by columns below before calculating summaries
+      group_by(region, SAUP, Gear, FGroup, Sector) %>%
+      #Add all data within groups
+      summarise(NomActive = sum(NomActive, na.rm = TRUE),
+                EffActive = sum(EffActive, na.rm = TRUE),
+                NV = sum(NV, na.rm = TRUE),
+                P = sum(P, na.rm = TRUE),
+                GT = sum(GT, na.rm = TRUE)) %>%
+      #Add year 
+      mutate(Year = Year) %>%
+      as.data.table() %>% 
+      #Save file
+      fwrite(file = this_destination_path)
+  }
+}
+```
+
+## Parallelising work
+
+We will be splitting the list containing 29852 files into smaller chunks
+for faster processing.
+
+``` r
+#Chunk size for processing
+chunk_size <- 500
+
+#Splitting files into smaller chunks
+effort_list_split <- split(original_effort_files, ceiling(seq_along(original_effort_files)/chunk_size))
+
+#Printing number of items per chunk
+length(effort_list_split)
+```
+
+    ## [1] 60
+
+### Applying `join_effort_data` function
+
+``` r
+#Looping across list containing the smaller file chunks
+for(i in seq_along(effort_list_split)){
+  file_chunk <- effort_list_split[[i]]
+  #Print message advising progress of data extraction
+  message("Processing chunk #", i, " of ", length(effort_list_split))
+  #Applying function to all elements within chunk
+  mclapply(X = file_chunk, FUN = join_effort_data, mask_df, "05deg", mc.cores = 8)
+  
+  #If the above parallelisation does not work, use the loop below
+  # for(j in seq_along(file_chunk)){
+  #   join_effort_data(file_chunk[j], mask_df, "05deg")
+  # }
+}
+```
+
+## Creating a single file for all aggregated effort
+
+``` r
+#Getting list of all files saved in memory
+newly_written_files <- list.files(aggregated_files_dir, full.names = TRUE, recursive = T)
+
+out_file <- paste(aggregated_files_dir, "05deg/05deg_all_effort_aggregated.csv", sep = "/") 
+
+#Merging all files into a single file - Parallelising work
+mclapply(X = newly_written_files, FUN = read_csv, mc.cores = 8) %>% 
+  #Unlisting and creating a single data frame
+  bind_rows() %>%
+  #Saving resulting merged file to disk
+  write_csv(out_file)
+```

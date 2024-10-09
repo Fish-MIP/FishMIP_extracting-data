@@ -1,0 +1,133 @@
+---
+title: "Plotting ISIMIP data"
+author: "Denisse Fierro Arcos"
+date: "2022-08-26"
+output: 
+  github_document:
+    toc: true
+    html_preview: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+## R-based code
+You are now ready to load the dataset into `R` to make any calculations and visualise results.
+
+### Inspecting contents of netcdf file
+For a quick overview of the content of the dataset we just downloaded, we can make use of the `metR` package.
+
+```{r}
+#Provide file path to netcdf that was recently downloaded.
+data_file <- "../data/ecoocean_gfdl-esm4_nobasd_historical_histsoc_default_tc_lat-90.0to-40.0lon-180.0to180.0_monthly_1950_2014.nc"
+
+#Check contents of netcdf
+GlanceNetCDF(data_file)
+```
+
+This output, however, does not give you information about `No Data Values`. So we will load the first timestep included in our dataset to obtain this information.  
+  
+We will also plot the data to inspect it quickly.
+
+```{r}
+#Loading the first timestep as raster
+tc_raster <- raster(data_file, band = 1)
+
+#Extracting missing values
+NA_val <- tc_raster@file@nodatavalue
+
+#Plotting raster
+plot(tc_raster)
+```
+We can see that a `No Data Values` is included in the dataset to mark areas where no values have been collected because all land areas have the same value.  
+  
+We can create a mask for the `No Data Values` and plot the raster again.
+
+```{r}
+#Changing values larger than No Data Value to NA
+tc_raster[tc_raster >= NA_val] <- NA
+
+#Plotting result
+plot(tc_raster)
+```
+
+### Loading dataset as dataframe for easy manipulation
+This data type allows us to use the `tidyverse` to make calculations easily.  
+  
+As seen from plotting the raster above, we must first mask `No Data Values` before we carry out any calculations.
+
+```{r}
+#Loading dataset as data frame
+tc_SO <- ReadNetCDF(data_file, vars = "tc") %>% 
+  #Masking No Data Values
+  mutate(tc = case_when(tc >= NA_val ~ NA_real_,
+         T ~ tc))
+```
+
+### Calculating climatology
+We will use all data between 1960 and 2020 to calculate the climatological mean of total catch for the Southern Ocean.
+
+```{r}
+clim_tc <- tc_SO %>% 
+  #Extracting data between 1960 and 2020
+  filter(year(time) >= 1960 & year(time) <= 2020) %>% 
+  #Calculating climatological mean for total catch per pixel
+  group_by(lat, lon) %>% 
+  summarise(mean_tc = mean(tc, na.rm = F))
+```
+
+### Plotting climatology
+
+```{r}
+#Accessing coastline shapefiles
+land <- rnaturalearth::ne_countries(returnclass = "sf") %>% 
+  #Extracting land within data boundaries
+  st_crop(c(ymin = -90, ymax = -40, 
+            xmin = -180, xmax = 180)) 
+
+#Plotting data
+clim_tc %>% 
+  ggplot(aes(y = lat, x = lon))+
+  geom_contour_fill(aes(z = mean_tc, fill = stat(level)),
+                        binwidth = 2)+
+  scale_fill_distiller(palette = "YlOrBr", 
+                       direction = 1, 
+                       super = ScaleDiscretised)+
+  guides(fill = guide_colorbar(title.position = "top",
+                               title.hjust =  0.5,
+                               barwidth = 15))+
+  geom_sf(data = land, inherit.aes = F,
+          fill = "grey", color = "black")+
+  labs(x = NULL, y = NULL, 
+       fill = "Total Catch in g m-2")+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        legend.position = "bottom")
+ 
+
+```
+
+
+### Obtaining timeseries
+
+
+```{r}
+# tc_SO %>% 
+#   #Calculating climatological mean for total catch per pixel
+#   group_by(time) %>% 
+#   summarise(mean_tc = mean(tc, na.rm = F)) %>% View()
+#   ggplot() %>% 
+  
+
+
+  
+```
+
+
+
+

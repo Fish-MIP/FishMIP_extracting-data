@@ -123,7 +123,7 @@ eez_world %>%
   theme(legend.position = "none")
 ```
 
-![](Creating_Mask_EEZs_files/figure-gfm/plot_shapefile-1.png)<!-- -->
+![](figures/Creating_Mask_EEZs_files/figure-gfm/plot_shapefile-1.png)<!-- -->
 
 ## Extracting names and codes for EEZ
 
@@ -186,7 +186,7 @@ mod_name <- ""
 plot(ras)
 ```
 
-![](Creating_Mask_EEZs_files/figure-gfm/load_rasters_input-1.png)<!-- -->
+![](figures/Creating_Mask_EEZs_files/figure-gfm/load_rasters_input-1.png)<!-- -->
 \### Calculate grid area The `raster` package allows us to calculate the
 area of grid cells in $km^2$ in just one line of code. We can save this
 to calculate weighted means by area. We will use the raster above as a
@@ -239,7 +239,7 @@ grid_raster <- map(eez_list, shp_to_raster, ras) %>%
 plot(grid_raster[[c(31:34, 45, 103)]])
 ```
 
-![](Creating_Mask_EEZs_files/figure-gfm/mapping_function-1.png)<!-- -->
+![](figures/Creating_Mask_EEZs_files/figure-gfm/mapping_function-1.png)<!-- -->
 
 Finally, we save the outputs in our local machine.
 
@@ -764,7 +764,7 @@ for reg in aus_eez:
   plt.show()
 ```
 
-<img src="Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-1.png" width="672" /><img src="Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-2.png" width="672" /><img src="Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-3.png" width="672" /><img src="Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-4.png" width="672" /><img src="Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-5.png" width="672" /><img src="Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-6.png" width="672" /><img src="Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-7.png" width="672" />
+<img src="figures/Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-1.png" width="672" /><img src="figures/Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-2.png" width="672" /><img src="figures/Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-3.png" width="672" /><img src="figures/Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-4.png" width="672" /><img src="figures/Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-5.png" width="672" /><img src="figures/Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-6.png" width="672" /><img src="figures/Creating_Mask_EEZs_files/figure-gfm/unnamed-chunk-10-7.png" width="672" />
 
 When comparing to the shapefile plots in the `R` section of this
 notebook, we can see that the regions are named correctly. This means
