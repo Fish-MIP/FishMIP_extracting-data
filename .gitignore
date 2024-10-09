@@ -179,3 +179,4 @@ dmypy.json
 
 #Ignore spatial folder
 Spatial_Data/
+data/Sample
